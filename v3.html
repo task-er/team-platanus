@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>3매칭 캐주얼 퍼즐</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at top, #1f2937, #020617 60%);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        color: #f9fafb;
+      }
+
+      .game {
+        background: rgba(15, 23, 42, 0.95);
+        padding: 16px 20px 20px;
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7),
+          0 0 0 1px rgba(148, 163, 184, 0.2);
+        backdrop-filter: blur(12px);
+      }
+
+      .game-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .game-title {
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .game-title span {
+        font-size: 13px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(56, 189, 248, 0.1);
+        color: #38bdf8;
+        border: 1px solid rgba(56, 189, 248, 0.4);
+      }
+
+      .stats {
+        display: flex;
+        gap: 10px;
+        font-size: 13px;
+      }
+
+      .stat {
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+      }
+
+      .stat-label {
+        opacity: 0.7;
+      }
+      .stat-value {
+        font-weight: 700;
+      }
+
+      .board-wrap {
+        margin-top: 6px;
+        position: relative;
+      }
+
+      .board {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(8, 48px);
+        grid-template-rows: repeat(8, 48px);
+        gap: 6px;
+        padding: 8px;
+        border-radius: 14px;
+        background: radial-gradient(
+          circle at top,
+          #020617,
+          #020617 55%,
+          #0b1120
+        );
+        box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 1),
+          0 18px 30px rgba(15, 23, 42, 0.8);
+        transition: transform 0.12s ease-out;
+      }
+
+      .board.invalid-swap {
+        animation: shake 0.14s ease-in-out 0s 2;
+      }
+
+      @keyframes shake {
+        0% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-3px);
+        }
+        50% {
+          transform: translateX(3px);
+        }
+        75% {
+          transform: translateX(-2px);
+        }
+        100% {
+          transform: translateX(0);
+        }
+      }
+
+      .tile {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: #f9fafb;
+        cursor: pointer;
+        user-select: none;
+        box-shadow: 0 4px 0 rgba(15, 23, 42, 0.6),
+          0 0 0 1px rgba(15, 23, 42, 0.8);
+        transition: transform 0.18s ease-out, box-shadow 0.18s ease-out,
+          filter 0.18s ease-out, opacity 0.18s ease-out;
+        position: relative;
+        font-size: 24px; /* 이모지 크게 */
+      }
+
+      .tile::after {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        border-radius: inherit;
+        background: radial-gradient(
+          circle at 30% 20%,
+          rgba(255, 255, 255, 0.16),
+          transparent 55%
+        );
+        opacity: 0.9;
+        mix-blend-mode: screen;
+        pointer-events: none;
+      }
+
+      .tile:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 0 rgba(15, 23, 42, 0.7), 0 0 0 1px rgba(15, 23, 42, 1);
+        filter: brightness(1.05);
+      }
+
+      .tile.selected {
+        outline: 3px solid #facc15;
+        outline-offset: 2px;
+        transform: translateY(-2px) scale(1.06);
+        box-shadow: 0 8px 0 rgba(15, 23, 42, 0.8), 0 0 0 1px rgba(15, 23, 42, 1);
+        z-index: 1;
+      }
+
+      /* 간단한 타입별 배경색 (살짝 파스텔) */
+      .tile-0 {
+        background: radial-gradient(circle at 30% 20%, #fed7aa, #fb923c);
+      }
+      .tile-1 {
+        background: radial-gradient(circle at 30% 20%, #bbf7d0, #22c55e);
+      }
+      .tile-2 {
+        background: radial-gradient(circle at 30% 20%, #bae6fd, #3b82f6);
+      }
+      .tile-3 {
+        background: radial-gradient(circle at 30% 20%, #f5d0fe, #a855f7);
+      }
+      .tile-4 {
+        background: radial-gradient(circle at 30% 20%, #fecdd3, #fb7185);
+      }
+
+      /* ==== 매치 표시 & 터지는 이펙트 ==== */
+
+      /* 1단계: 매치된 블록 반짝 (화려하지만 짧게) */
+      .tile.matched {
+        animation: match-glow 0.38s ease-in-out forwards;
+      }
+
+      @keyframes match-glow {
+        0% {
+          transform: scale(1);
+          filter: brightness(1);
+          box-shadow: 0 4px 0 rgba(15, 23, 42, 0.6),
+            0 0 0 1px rgba(15, 23, 42, 0.8), 0 0 0 0 rgba(250, 204, 21, 0);
+        }
+        60% {
+          transform: scale(1.16);
+          filter: brightness(1.25);
+          box-shadow: 0 6px 0 rgba(15, 23, 42, 0.7),
+            0 0 0 1px rgba(15, 23, 42, 1), 0 0 20px 7px rgba(250, 204, 21, 0.95);
+        }
+        100% {
+          transform: scale(1.08);
+          filter: brightness(1.1);
+          box-shadow: 0 4px 0 rgba(15, 23, 42, 0.6),
+            0 0 0 1px rgba(15, 23, 42, 0.9),
+            0 0 12px 4px rgba(250, 204, 21, 0.75);
+        }
+      }
+
+      /* 2단계: 실제로 터질 때 (살짝 회전하며 줄어듦) */
+      .tile.clearing {
+        animation: tile-pop 0.32s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+        box-shadow: none;
+      }
+
+      @keyframes tile-pop {
+        0% {
+          opacity: 1;
+          transform: scale(1.1) rotate(0deg);
+        }
+        40% {
+          opacity: 1;
+          transform: scale(1.2) rotate(4deg);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(0.2) rotate(-16deg);
+        }
+      }
+
+      /* ==== 떨어지는 이펙트 (느리게, 부드럽게) ==== */
+      .tile.spawn {
+        animation: tile-fall 0.55s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+      }
+
+      @keyframes tile-fall {
+        0% {
+          opacity: 0;
+          transform: translateY(-34px) scale(0.95);
+        }
+        65% {
+          opacity: 1;
+          transform: translateY(6px) scale(1.02);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      /* ==== 스왑 이펙트 (두 블록이 서로를 향해 이동) ==== */
+      .tile.swapping {
+        z-index: 2;
+        transition: transform 0.18s ease-in-out;
+      }
+      .tile.swapping.swap-right {
+        transform: translateX(100%);
+      }
+      .tile.swapping.swap-left {
+        transform: translateX(-100%);
+      }
+      .tile.swapping.swap-up {
+        transform: translateY(-100%);
+      }
+      .tile.swapping.swap-down {
+        transform: translateY(100%);
+      }
+
+      .controls {
+        margin-top: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        font-size: 12px;
+        color: #cbd5f5;
+      }
+
+      .hint {
+        opacity: 0.8;
+      }
+
+      .btn {
+        border: none;
+        border-radius: 999px;
+        padding: 7px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        background: linear-gradient(135deg, #38bdf8, #6366f1);
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.6),
+          0 0 0 1px rgba(15, 23, 42, 0.8);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .btn span {
+        font-size: 14px;
+      }
+
+      .btn:active {
+        transform: translateY(1px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.6),
+          0 0 0 1px rgba(15, 23, 42, 0.8);
+      }
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        border-radius: 14px;
+        background: radial-gradient(
+          circle at top,
+          rgba(15, 23, 42, 0.1),
+          rgba(15, 23, 42, 0.97)
+        );
+        display: none;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 16px;
+        z-index: 10;
+      }
+
+      .overlay.show {
+        display: flex;
+      }
+
+      .overlay-box {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .overlay-title {
+        font-weight: 700;
+        font-size: 18px;
+      }
+      .overlay-score {
+        font-size: 14px;
+        opacity: 0.9;
+      }
+
+      @media (max-width: 480px) {
+        .board {
+          grid-template-columns: repeat(8, 40px);
+          grid-template-rows: repeat(8, 40px);
+          gap: 5px;
+        }
+        .tile {
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          font-size: 22px;
+        }
+        .game {
+          transform: scale(0.96);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="game">
+      <header class="game-header">
+        <div class="game-title">
+          ⚡ 음식 3매칭 퍼즐
+          <span>HTML · CSS · JS</span>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-label">점수</div>
+            <div class="stat-value" id="scoreText">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">남은 이동</div>
+            <div class="stat-value" id="movesText">30</div>
+          </div>
+        </div>
+      </header>
+
+      <div class="board-wrap">
+        <div class="board" id="board"></div>
+        <div class="overlay" id="overlay">
+          <div class="overlay-box">
+            <div class="overlay-title" id="overlayTitle">게임 종료!</div>
+            <div class="overlay-score" id="overlayScore"></div>
+            <button class="btn" id="restartBtn">
+              <span>↻</span> 다시 시작
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="hint">
+          인접한 음식 이모지를 클릭해서 서로 교환하세요. 3개 이상 이어지면
+          화려하게 터집니다!
+        </div>
+        <button class="btn" id="resetBtn"><span>↻</span> 새 판</button>
+      </div>
+    </div>
+
+    <script>
+      const BOARD_SIZE = 8;
+      const TILE_TYPES = 5;
+      const MAX_MOVES = 30;
+      const SWAP_DURATION = 180; // 스왑 애니메이션 시간(ms)
+
+      const EMOJIS = ["🍎", "🍕", "🍣", "🍔", "🍰"];
+
+      const boardEl = document.getElementById("board");
+      const scoreText = document.getElementById("scoreText");
+      const movesText = document.getElementById("movesText");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayScore = document.getElementById("overlayScore");
+      const resetBtn = document.getElementById("resetBtn");
+      const restartBtn = document.getElementById("restartBtn");
+
+      let board = [];
+      let selected = null; // { row, col }
+      let score = 0;
+      let moves = MAX_MOVES;
+      let animating = false;
+
+      function createEmptyBoard() {
+        board = new Array(BOARD_SIZE)
+          .fill(0)
+          .map(() => new Array(BOARD_SIZE).fill(0));
+      }
+
+      function randomTile() {
+        return Math.floor(Math.random() * TILE_TYPES);
+      }
+
+      // 같은 줄 3개 이상 안 생기도록 초기 보드 생성
+      function generateInitialBoard() {
+        createEmptyBoard();
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          for (let c = 0; c < BOARD_SIZE; c++) {
+            let t;
+            do {
+              t = randomTile();
+            } while (
+              (c >= 2 && board[r][c - 1] === t && board[r][c - 2] === t) ||
+              (r >= 2 && board[r - 1][c] === t && board[r - 2][c] === t)
+            );
+            board[r][c] = t;
+          }
+        }
+      }
+
+      /**
+       * highlighted: 매치된 타일 리스트
+       * spawned: 떨어진/새로 생긴 타일 리스트
+       * highlightMode: "none" | "mark" | "clear"
+       */
+      function renderBoard(
+        highlighted = [],
+        spawned = [],
+        highlightMode = "none"
+      ) {
+        const highlightSet = new Set(
+          highlighted.map((p) => `${p.row},${p.col}`)
+        );
+        const spawnSet = new Set(spawned.map((p) => `${p.row},${p.col}`));
+
+        boardEl.innerHTML = "";
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          for (let c = 0; c < BOARD_SIZE; c++) {
+            const value = board[r][c];
+            const tile = document.createElement("div");
+            tile.className = "tile tile-" + value;
+            tile.dataset.row = r;
+            tile.dataset.col = c;
+            tile.textContent = EMOJIS[value % EMOJIS.length];
+
+            const key = `${r},${c}`;
+
+            if (selected && selected.row === r && selected.col === c) {
+              tile.classList.add("selected");
+            }
+
+            if (highlightSet.has(key)) {
+              if (highlightMode === "clear") {
+                tile.classList.add("clearing");
+              } else if (highlightMode === "mark") {
+                tile.classList.add("matched");
+              }
+            }
+
+            if (spawnSet.has(key)) {
+              tile.classList.add("spawn");
+            }
+
+            boardEl.appendChild(tile);
+          }
+        }
+      }
+
+      function updateUI() {
+        scoreText.textContent = score;
+        movesText.textContent = moves;
+      }
+
+      function findMatches() {
+        const matches = [];
+
+        // 가로 체크
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          let runStart = 0;
+          for (let c = 1; c <= BOARD_SIZE; c++) {
+            const current = board[r][c];
+            const prev = board[r][c - 1];
+            if (c < BOARD_SIZE && current === prev && current != null) {
+              continue;
+            }
+            const runLength = c - runStart;
+            if (runLength >= 3 && board[r][runStart] != null) {
+              for (let k = 0; k < runLength; k++) {
+                matches.push({
+                  row: r,
+                  col: runStart + k,
+                });
+              }
+            }
+            runStart = c;
+          }
+        }
+
+        // 세로 체크
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          let runStart = 0;
+          for (let r = 1; r <= BOARD_SIZE; r++) {
+            const current = r < BOARD_SIZE ? board[r][c] : null;
+            const prev = board[r - 1][c];
+            if (r < BOARD_SIZE && current === prev && current != null) {
+              continue;
+            }
+            const runLength = r - runStart;
+            if (runLength >= 3 && board[runStart][c] != null) {
+              for (let k = 0; k < runLength; k++) {
+                matches.push({
+                  row: runStart + k,
+                  col: c,
+                });
+              }
+            }
+            runStart = r;
+          }
+        }
+
+        // 중복 제거
+        const unique = [];
+        const seen = new Set();
+        for (const m of matches) {
+          const key = `${m.row},${m.col}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            unique.push(m);
+          }
+        }
+        return unique;
+      }
+
+      // 중력을 적용하고, 떨어진/새로 생긴 타일 위치 반환
+      function applyGravity() {
+        const spawned = [];
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          let writeRow = BOARD_SIZE - 1;
+          // 아래에서 위로 스캔하면서 null이 아닌 타일을 아래로 모음
+          for (let r = BOARD_SIZE - 1; r >= 0; r--) {
+            if (board[r][c] != null) {
+              if (writeRow !== r) {
+                board[writeRow][c] = board[r][c];
+                board[r][c] = null;
+                spawned.push({ row: writeRow, col: c });
+              }
+              writeRow--;
+            }
+          }
+          // 위쪽 빈 칸은 새 타일로 채우기
+          for (let r = writeRow; r >= 0; r--) {
+            board[r][c] = randomTile();
+            spawned.push({ row: r, col: c });
+          }
+        }
+        return spawned;
+      }
+
+      function handleMatches(matches, chain = 0) {
+        if (!matches || matches.length === 0) {
+          animating = false;
+          selected = null;
+          renderBoard();
+          return;
+        }
+
+        const base = 10;
+        score += matches.length * base * (chain + 1);
+        updateUI();
+
+        const MARK_DELAY = 380;
+        const CLEAR_DELAY = 320;
+        const CHAIN_DELAY = 260;
+
+        // 1단계: 매치 표시
+        renderBoard(matches, [], "mark");
+
+        setTimeout(() => {
+          // 2단계: 터지는 애니메이션
+          renderBoard(matches, [], "clear");
+
+          setTimeout(() => {
+            // 3단계: 실제 제거
+            for (const pos of matches) {
+              board[pos.row][pos.col] = null;
+            }
+
+            // 4단계: 중력 + 새 블록
+            const spawned = applyGravity();
+            renderBoard([], spawned, "none");
+
+            const nextMatches = findMatches();
+            if (nextMatches.length > 0) {
+              setTimeout(() => {
+                handleMatches(nextMatches, chain + 1);
+              }, CHAIN_DELAY);
+            } else {
+              moves--;
+              updateUI();
+              animating = false;
+              selected = null;
+              renderBoard();
+              checkGameOver();
+            }
+          }, CLEAR_DELAY);
+        }, MARK_DELAY);
+      }
+
+      function swapTiles(r1, c1, r2, c2) {
+        const tmp = board[r1][c1];
+        board[r1][c1] = board[r2][c2];
+        board[r2][c2] = tmp;
+      }
+
+      function getTileElement(row, col) {
+        return boardEl.querySelector(
+          `.tile[data-row="${row}"][data-col="${col}"]`
+        );
+      }
+
+      // 스왑 애니메이션: DOM을 재렌더하지 않고, 두 블럭만 transform
+      function trySwap(r1, c1, r2, c2) {
+        if (animating) return;
+        animating = true;
+
+        const tileA = getTileElement(r1, c1);
+        const tileB = getTileElement(r2, c2);
+        if (!tileA || !tileB) {
+          animating = false;
+          return;
+        }
+
+        const horizontal = r1 === r2;
+
+        tileA.classList.add("swapping");
+        tileB.classList.add("swapping");
+
+        if (horizontal) {
+          if (c2 > c1) {
+            tileA.classList.add("swap-right");
+            tileB.classList.add("swap-left");
+          } else {
+            tileA.classList.add("swap-left");
+            tileB.classList.add("swap-right");
+          }
+        } else {
+          if (r2 > r1) {
+            tileA.classList.add("swap-down");
+            tileB.classList.add("swap-up");
+          } else {
+            tileA.classList.add("swap-up");
+            tileB.classList.add("swap-down");
+          }
+        }
+
+        // 1차 스왑 애니메이션 끝난 후
+        setTimeout(() => {
+          // 클래스 제거
+          tileA.classList.remove(
+            "swapping",
+            "swap-right",
+            "swap-left",
+            "swap-up",
+            "swap-down"
+          );
+          tileB.classList.remove(
+            "swapping",
+            "swap-right",
+            "swap-left",
+            "swap-up",
+            "swap-down"
+          );
+
+          // 실제 데이터 스왑
+          swapTiles(r1, c1, r2, c2);
+          renderBoard(); // 새 위치를 기준으로 다시 그림
+
+          const matches = findMatches();
+          if (matches.length === 0) {
+            // 유효하지 않은 스왑 → 다시 원위치로 되돌리는 애니메이션
+            const backA = getTileElement(r1, c1);
+            const backB = getTileElement(r2, c2);
+            if (!backA || !backB) {
+              animating = false;
+              selected = null;
+              renderBoard();
+              return;
+            }
+
+            backA.classList.add("swapping");
+            backB.classList.add("swapping");
+
+            if (horizontal) {
+              if (c2 > c1) {
+                backA.classList.add("swap-right");
+                backB.classList.add("swap-left");
+              } else {
+                backA.classList.add("swap-left");
+                backB.classList.add("swap-right");
+              }
+            } else {
+              if (r2 > r1) {
+                backA.classList.add("swap-down");
+                backB.classList.add("swap-up");
+              } else {
+                backA.classList.add("swap-up");
+                backB.classList.add("swap-down");
+              }
+            }
+
+            setTimeout(() => {
+              // 되돌리고, 데이터도 원위치
+              backA.classList.remove(
+                "swapping",
+                "swap-right",
+                "swap-left",
+                "swap-up",
+                "swap-down"
+              );
+              backB.classList.remove(
+                "swapping",
+                "swap-right",
+                "swap-left",
+                "swap-up",
+                "swap-down"
+              );
+              swapTiles(r1, c1, r2, c2);
+              boardEl.classList.add("invalid-swap");
+              renderBoard();
+              setTimeout(() => {
+                boardEl.classList.remove("invalid-swap");
+                animating = false;
+                selected = null;
+                renderBoard();
+              }, 150);
+            }, SWAP_DURATION);
+          } else {
+            // 유효한 스왑 → 매치 처리
+            setTimeout(() => {
+              handleMatches(matches, 0);
+            }, 60);
+          }
+        }, SWAP_DURATION);
+      }
+
+      function handleTileClick(e) {
+        if (animating) return;
+
+        const tileEl = e.target.closest(".tile");
+        if (!tileEl) return;
+
+        const row = parseInt(tileEl.dataset.row, 10);
+        const col = parseInt(tileEl.dataset.col, 10);
+
+        if (selected && selected.row === row && selected.col === col) {
+          // 같은 칸 다시 클릭 → 선택 해제
+          selected = null;
+          renderBoard();
+          return;
+        }
+
+        if (!selected) {
+          selected = { row, col };
+          renderBoard();
+          return;
+        }
+
+        const dr = Math.abs(selected.row - row);
+        const dc = Math.abs(selected.col - col);
+
+        if (dr + dc === 1) {
+          // 인접칸이면 교환 시도
+          const from = { ...selected };
+          selected = { row, col }; // 두 칸 다 선택 표시
+          renderBoard();
+          trySwap(from.row, from.col, row, col);
+        } else {
+          // 인접하지 않으면 선택 위치만 변경
+          selected = { row, col };
+          renderBoard();
+        }
+      }
+
+      function checkGameOver() {
+        if (moves <= 0) {
+          overlayTitle.textContent = "게임 종료!";
+          overlayScore.textContent = `최종 점수: ${score.toLocaleString()}점`;
+          overlay.classList.add("show");
+        }
+      }
+
+      function resetGame() {
+        score = 0;
+        moves = MAX_MOVES;
+        selected = null;
+        animating = false;
+        overlay.classList.remove("show");
+        generateInitialBoard();
+        updateUI();
+        renderBoard();
+      }
+
+      // 이벤트 바인딩
+      boardEl.addEventListener("click", handleTileClick);
+      resetBtn.addEventListener("click", resetGame);
+      restartBtn.addEventListener("click", resetGame);
+
+      // 초기 시작
+      resetGame();
+    </script>
+  </body>
+</html>

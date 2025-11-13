@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>꼬치 가게 퍼즐 (인게임 화면)</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        padding: 0;
+        margin: 0;
+      }
+      body {
+        background: radial-gradient(circle at top, #2b2b3f, #111);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #f5f5f5;
+        overflow: hidden;
+      }
+      #game-wrapper {
+        position: relative;
+      }
+      canvas {
+        background: #1c1c24;
+        border-radius: 24px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        touch-action: none; /* avoid scroll on drag */
+        display: block;
+      }
+      /* 팝업 */
+      #popup {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 10;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      #popup.visible {
+        pointer-events: all;
+        opacity: 1;
+      }
+      #popup .popup-content {
+        min-width: 260px;
+        max-width: 320px;
+        background: #252535;
+        border-radius: 16px;
+        padding: 20px 22px 16px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+        text-align: center;
+      }
+      #popup-message {
+        margin-bottom: 14px;
+        line-height: 1.5;
+        font-size: 14px;
+        white-space: pre-line;
+      }
+      #popup-btn {
+        border: none;
+        border-radius: 999px;
+        padding: 8px 18px;
+        font-size: 14px;
+        cursor: pointer;
+        background: linear-gradient(135deg, #ffb347, #ffcc33);
+        color: #333;
+        font-weight: 600;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+      }
+      #popup-btn:active {
+        transform: translateY(1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-wrapper">
+      <canvas id="game"></canvas>
+    </div>
+
+    <!-- 간단 팝업 -->
+    <div id="popup">
+      <div class="popup-content">
+        <p id="popup-message"></p>
+        <button id="popup-btn">확인</button>
+      </div>
+    </div>
+
+    <script>
+      // ===== 캔버스 & 기본 세팅 =====
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+
+      const popupEl = document.getElementById("popup");
+      const popupMsgEl = document.getElementById("popup-message");
+      const popupBtnEl = document.getElementById("popup-btn");
+
+      function showPopup(message, onOk) {
+        popupMsgEl.textContent = message;
+        popupEl.classList.add("visible");
+        currentPopupCallback = onOk || null;
+        inputEnabled = false;
+      }
+
+      function hidePopup() {
+        popupEl.classList.remove("visible");
+        inputEnabled = true;
+      }
+
+      let currentPopupCallback = null;
+      popupBtnEl.addEventListener("click", () => {
+        hidePopup();
+        if (typeof currentPopupCallback === "function") {
+          const cb = currentPopupCallback;
+          currentPopupCallback = null;
+          cb();
+        }
+      });
+
+      // ===== 게임 상수 =====
+      const ROWS = 8;
+      const COLS = 6;
+
+      // 최대 6종 재료
+      const ingredients = [
+        { id: 0, name: "치즈", color: "#f5d259", emoji: "🧀" },
+        { id: 1, name: "닭고기", color: "#f7a6a6", emoji: "🍗" },
+        { id: 2, name: "대파", color: "#a8e6a3", emoji: "🥬" },
+        { id: 3, name: "버섯", color: "#d3c1a5", emoji: "🍄" },
+        { id: 4, name: "소고기", color: "#f08b8b", emoji: "🥩" },
+        { id: 5, name: "양파", color: "#f6e4ff", emoji: "🧅" },
+      ];
+
+      // 손님 실없는 농담들
+      const customerJokes = [
+        "오늘은 꼬치 3개까지만...\n다이어트 중이거든요.",
+        "이 집 꼬치 먹으면\n기분이 레벨업 한다던데요?",
+        "꼬치 하나에 고민 하나씩\n사라지는 거 맞죠?",
+        "맵지는 않게 해주세요.\n제 위장이 야근 중이라서요.",
+        "전부 타도 괜찮아요.\n제 인생도 타있거든요.",
+        "추천 메뉴요?\n사장님이 행복해지는 걸로요.",
+      ];
+      let currentJoke = customerJokes[0];
+
+      let stage = 1;
+      let grid = [];
+      let orderPattern = [0, 0, 0];
+
+      // 레이아웃 정보
+      let topAreaHeight = 0;
+      let boardAreaTop = 0;
+      let boardAreaHeight = 0;
+      let boardOffsetX = 0;
+      let boardOffsetY = 0;
+      let tileSize = 0;
+
+      // 손님 (상단 영역)
+      let customerX = 0;
+      let customerY = 0;
+      let customerTargetX = 0;
+      let customerEntering = true;
+      const customerSpeed = 400; // px/sec
+
+      // 입력 / 드래그
+      let inputEnabled = true;
+      let isDragging = false;
+      let currentPointer = { x: 0, y: 0 };
+      let selection = []; // {row, col}
+      let invalidSelection = [];
+      let invalidFeedbackTime = 0;
+
+      // 리프레시/애니메이션 플래그
+      let boardFalling = false;
+      let fallStartTime = 0;
+      const fallDuration = 0.4; // seconds
+
+      // 유틸
+      function randInt(max) {
+        return Math.floor(Math.random() * max);
+      }
+
+      // 현재 스테이지에서 사용할 재료 종류 수 (최대 6)
+      function getActiveIngredientCount() {
+        return Math.min(ingredients.length, stage);
+      }
+
+      // ===== 캔버스 크기 & 레이아웃 조정 =====
+      function resizeCanvas() {
+        const maxWidth = 430; // 세로 모바일 느낌
+        let width = Math.min(window.innerWidth - 20, maxWidth);
+        if (width < 260) width = 260;
+        const height = (width * 16) / 9; // 세로 비율
+
+        canvas.width = width;
+        canvas.height = height;
+
+        topAreaHeight = height * 0.25;
+        boardAreaTop = topAreaHeight;
+        boardAreaHeight = height - topAreaHeight;
+
+        const boardPadding = 12;
+        const usableWidth = width - boardPadding * 2;
+        const usableHeight = boardAreaHeight - boardPadding * 2;
+
+        const sizeByWidth = usableWidth / COLS;
+        const sizeByHeight = usableHeight / ROWS;
+        tileSize = Math.min(sizeByWidth, sizeByHeight);
+
+        const boardTotalWidth = tileSize * COLS;
+        const boardTotalHeight = tileSize * ROWS;
+
+        boardOffsetX = (width - boardTotalWidth) / 2;
+        boardOffsetY = boardAreaTop + (boardAreaHeight - boardTotalHeight) / 2;
+
+        // 손님 위치 초기화 (중앙)
+        customerY = topAreaHeight * 0.6;
+        customerTargetX = canvas.width / 2;
+        if (customerEntering) {
+          customerX = canvas.width + 80;
+        }
+      }
+
+      window.addEventListener("resize", resizeCanvas);
+
+      // ===== 보드 관련 함수 =====
+      function createRandomBoard() {
+        const activeCount = getActiveIngredientCount();
+        grid = [];
+        for (let r = 0; r < ROWS; r++) {
+          const row = [];
+          for (let c = 0; c < COLS; c++) {
+            const type = randInt(activeCount);
+            row.push({
+              row: r,
+              col: c,
+              type,
+              fallStartY: boardOffsetY + r * tileSize - tileSize * 2,
+              fallEndY: boardOffsetY + r * tileSize,
+            });
+          }
+          grid.push(row);
+        }
+        boardFalling = true;
+        fallStartTime = performance.now() / 1000;
+      }
+
+      function generateOrder() {
+        const activeCount = getActiveIngredientCount();
+        orderPattern = [
+          randInt(activeCount),
+          randInt(activeCount),
+          randInt(activeCount),
+        ];
+      }
+
+      // 드래그가 달라붙는 영역을 축소한 버전
+      function coordsToCell(x, y) {
+        const col = Math.floor((x - boardOffsetX) / tileSize);
+        const row = Math.floor((y - boardOffsetY) / tileSize);
+        if (row >= 0 && row < ROWS && col >= 0 && col < COLS) {
+          // 타일 내부의 좌표
+          const tileLeft = boardOffsetX + col * tileSize;
+          const tileTop = boardOffsetY + row * tileSize;
+          const localX = x - tileLeft;
+          const localY = y - tileTop;
+
+          // 가장자리 영역은 무시 (대각선 잇기 좋게)
+          const margin = tileSize * 0.2; // 20% 만큼 shrink
+          if (
+            localX < margin ||
+            localX > tileSize - margin ||
+            localY < margin ||
+            localY > tileSize - margin
+          ) {
+            return null;
+          }
+
+          return { row, col };
+        }
+        return null;
+      }
+
+      function cellsEqual(a, b) {
+        return a.row === b.row && a.col === b.col;
+      }
+
+      function cellAlreadySelected(cell) {
+        return selection.some(
+          (sel) => sel.row === cell.row && sel.col === cell.col
+        );
+      }
+
+      function areNeighbors(a, b) {
+        const dr = Math.abs(a.row - b.row);
+        const dc = Math.abs(a.col - b.col);
+        return dr <= 1 && dc <= 1 && !(dr === 0 && dc === 0);
+      }
+
+      function getTileAtCell(cell) {
+        return grid[cell.row][cell.col];
+      }
+
+      // DFS로 남은 유효 매치 있는지 검사
+      function hasAnyValidMatch() {
+        if (!grid || !grid.length) return false;
+        const dirs = [
+          [-1, -1],
+          [-1, 0],
+          [-1, 1],
+          [0, -1],
+          [0, 1],
+          [1, -1],
+          [1, 0],
+          [1, 1],
+        ];
+
+        function dfs(r, c, depth, path, types) {
+          if (depth === 2) {
+            // 길이 3의 패턴
+            const [a, b, d] = types;
+            const allSame = a === b && b === d;
+            const matchOrder =
+              orderPattern &&
+              a === orderPattern[0] &&
+              b === orderPattern[1] &&
+              d === orderPattern[2];
+            if (allSame || matchOrder) return true;
+            return false;
+          }
+
+          for (let i = 0; i < dirs.length; i++) {
+            const nr = r + dirs[i][0];
+            const nc = c + dirs[i][1];
+            if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+            let used = false;
+            for (let j = 0; j < path.length; j++) {
+              if (path[j][0] === nr && path[j][1] === nc) {
+                used = true;
+                break;
+              }
+            }
+            if (used) continue;
+            const tile = grid[nr][nc];
+            if (!tile) continue;
+            path.push([nr, nc]);
+            types.push(tile.type);
+            if (dfs(nr, nc, depth + 1, path, types)) return true;
+            path.pop();
+            types.pop();
+          }
+          return false;
+        }
+
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            const tile = grid[r][c];
+            if (!tile) continue;
+            if (dfs(r, c, 0, [[r, c]], [tile.type])) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      function ensureAnyValidMatchWithOptionalPopup(showMsg) {
+        if (hasAnyValidMatch()) return;
+
+        const doShuffle = () => {
+          // 유효 매치 나올 때까지 새 보드 생성
+          let safeGuard = 0;
+          do {
+            createRandomBoard();
+            safeGuard++;
+          } while (!hasAnyValidMatch() && safeGuard < 100);
+        };
+
+        if (showMsg) {
+          showPopup("매치할 수 없네요.\n판을 섞습니다!", () => {
+            doShuffle();
+          });
+        } else {
+          doShuffle();
+        }
+      }
+
+      // ===== 스테이지 세팅 =====
+      function setupStage() {
+        generateOrder();
+        createRandomBoard();
+        ensureAnyValidMatchWithOptionalPopup(false);
+
+        // 손님 다시 등장
+        customerEntering = true;
+        customerX = canvas.width + 80;
+        customerTargetX = canvas.width / 2;
+
+        // 새로운 실없는 농담 선택
+        currentJoke = customerJokes[randInt(customerJokes.length)];
+      }
+
+      // ===== 선택 결과 처리 =====
+      function finishSelection() {
+        if (selection.length !== 3) {
+          selection = [];
+          return;
+        }
+
+        const types = selection.map((cell) => getTileAtCell(cell).type);
+
+        const matchesOrder =
+          types[0] === orderPattern[0] &&
+          types[1] === orderPattern[1] &&
+          types[2] === orderPattern[2];
+
+        const allSame = types[0] === types[1] && types[1] === types[2];
+
+        if (matchesOrder) {
+          // 1. 레시피와 동일 → 클리어
+          const doneSelection = selection.slice();
+          selection = [];
+          invalidSelection = doneSelection;
+          invalidFeedbackTime = 0.4;
+
+          showPopup("꼬치를 완성했어요!\n손님께 제공합니다. 😋", () => {
+            stage++;
+            setupStage();
+          });
+        } else if (allSame) {
+          // 2. 레시피와 다르지만 3개가 동일한 재료 → 팡, 떨어지기
+          const toRemove = selection.slice();
+          selection = [];
+          popTiles(toRemove);
+        } else {
+          // 3. 나머지 → 부르르 떨며 아무 동작 X
+          invalidSelection = selection.slice();
+          invalidFeedbackTime = 0.5;
+          selection = [];
+        }
+      }
+
+      function popTiles(cellsToRemove) {
+        // 선택된 타일 삭제
+        cellsToRemove.forEach((cell) => {
+          grid[cell.row][cell.col] = null;
+        });
+
+        const activeCount = getActiveIngredientCount();
+        let anyColumnFalling = false;
+
+        for (let c = 0; c < COLS; c++) {
+          const columnTiles = [];
+          for (let r = 0; r < ROWS; r++) {
+            if (grid[r][c]) {
+              columnTiles.push(grid[r][c]);
+            }
+          }
+
+          const missing = ROWS - columnTiles.length;
+
+          // 이 열에서만 타일이 제거되었으면 낙하/생성
+          if (missing > 0) {
+            anyColumnFalling = true;
+            const newColumn = [];
+
+            // 새 타일 위에서 생성
+            for (let i = 0; i < missing; i++) {
+              const type = randInt(activeCount);
+              const destRow = i;
+              newColumn.push({
+                row: destRow,
+                col: c,
+                type,
+                fallStartY: boardOffsetY + (destRow - 3) * tileSize,
+                fallEndY: boardOffsetY + destRow * tileSize,
+              });
+            }
+
+            // 기존 타일 아래로 밀기
+            for (let i = 0; i < columnTiles.length; i++) {
+              const destRow = i + missing;
+              const tile = columnTiles[i];
+              tile.row = destRow;
+              tile.col = c;
+              tile.fallStartY =
+                boardOffsetY + (destRow - missing - 1) * tileSize;
+              tile.fallEndY = boardOffsetY + destRow * tileSize;
+              newColumn.push(tile);
+            }
+
+            // 다시 grid에 반영
+            for (let r = 0; r < ROWS; r++) {
+              grid[r][c] = newColumn[r];
+            }
+          } else {
+            // 이 열은 변화 없음 → 낙하 애니메이션 없이 제자리
+            for (let r = 0; r < ROWS; r++) {
+              const tile = grid[r][c];
+              if (!tile) continue;
+              tile.row = r;
+              tile.col = c;
+              tile.fallStartY = boardOffsetY + r * tileSize;
+              tile.fallEndY = boardOffsetY + r * tileSize;
+            }
+          }
+        }
+
+        if (anyColumnFalling) {
+          boardFalling = true;
+          fallStartTime = performance.now() / 1000;
+        } else {
+          boardFalling = false;
+        }
+
+        // 애니메이션 후 매치 가능한지 확인
+        setTimeout(() => {
+          ensureAnyValidMatchWithOptionalPopup(true);
+        }, fallDuration * 1000 + 100);
+      }
+
+      // ===== 손님 업데이트 =====
+      function updateCustomer(dt) {
+        if (customerEntering) {
+          const dir = Math.sign(customerTargetX - customerX);
+          if (Math.abs(customerTargetX - customerX) < 2) {
+            customerX = customerTargetX;
+            customerEntering = false;
+          } else {
+            customerX += dir * customerSpeed * dt;
+          }
+        }
+      }
+
+      // ===== 입력 처리 =====
+      function getPointerPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        if (e.touches && e.touches[0]) {
+          return {
+            x: e.touches[0].clientX - rect.left,
+            y: e.touches[0].clientY - rect.top,
+          };
+        } else {
+          return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+          };
+        }
+      }
+
+      function pointerDown(e) {
+        if (!inputEnabled || boardFalling) return;
+        e.preventDefault();
+        const pos = getPointerPos(e);
+        currentPointer = pos;
+        const cell = coordsToCell(pos.x, pos.y);
+        if (!cell) return;
+
+        selection = [cell];
+        isDragging = true;
+      }
+
+      function pointerMove(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        const pos = getPointerPos(e);
+        currentPointer = pos;
+        const cell = coordsToCell(pos.x, pos.y);
+        if (!cell) return;
+
+        const last = selection[selection.length - 1];
+        if (!last) return;
+
+        if (selection.length >= 3) {
+          // 이미 3개면 더 이상 추가 X
+          return;
+        }
+
+        if (
+          !cellsEqual(last, cell) &&
+          areNeighbors(last, cell) &&
+          !cellAlreadySelected(cell)
+        ) {
+          selection.push(cell);
+        }
+      }
+
+      function pointerUp(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        isDragging = false;
+        finishSelection();
+      }
+
+      canvas.addEventListener("mousedown", pointerDown);
+      canvas.addEventListener("mousemove", pointerMove);
+      window.addEventListener("mouseup", pointerUp);
+
+      canvas.addEventListener("touchstart", pointerDown, { passive: false });
+      canvas.addEventListener("touchmove", pointerMove, { passive: false });
+      window.addEventListener("touchend", pointerUp, { passive: false });
+      window.addEventListener("touchcancel", pointerUp, { passive: false });
+
+      // ===== 그리기 =====
+      function drawBackground() {
+        // 상단 구역
+        ctx.fillStyle = "#26263a";
+        ctx.fillRect(0, 0, canvas.width, topAreaHeight);
+
+        // 카운터
+        ctx.fillStyle = "#1a1a26";
+        const counterHeight = 20;
+        ctx.fillRect(
+          0,
+          topAreaHeight - counterHeight,
+          canvas.width,
+          counterHeight
+        );
+
+        // 하단 구역
+        ctx.fillStyle = "#181820";
+        ctx.fillRect(
+          0,
+          topAreaHeight,
+          canvas.width,
+          canvas.height - topAreaHeight
+        );
+      }
+
+      function drawCustomer() {
+        const w = 70;
+        const h = 90;
+        const x = customerX;
+        const y = customerY - 50;
+        const left = x - w / 2;
+        const top = y - h / 2;
+
+        // 몸통
+        ctx.fillStyle = "#ffd4a3";
+        ctx.beginPath();
+        ctx.roundRect(left, top, w, h, 12);
+        ctx.fill();
+
+        // 얼굴
+        ctx.fillStyle = "#fff1d6";
+        const faceR = 22;
+        const faceCx = x;
+        const faceCy = top + faceR + 4;
+        ctx.beginPath();
+        ctx.arc(faceCx, faceCy, faceR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 눈
+        ctx.fillStyle = "#333";
+        const eyeOffsetX = 7;
+        ctx.beginPath();
+        ctx.arc(faceCx - eyeOffsetX, faceCy - 3, 2, 0, Math.PI * 2);
+        ctx.arc(faceCx + eyeOffsetX, faceCy - 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 입
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "#333";
+        ctx.beginPath();
+        ctx.arc(faceCx, faceCy + 3, 6, 0.1 * Math.PI, 0.9 * Math.PI, false);
+        ctx.stroke();
+
+        // 말풍선
+        const bubbleWidth = 200;
+        const bubbleHeight = 68;
+        const bubbleX = canvas.width / 2;
+        const bubbleY = top + h + 8;
+
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.strokeStyle = "rgba(0,0,0,0.15)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(
+          bubbleX - bubbleWidth / 2,
+          bubbleY,
+          bubbleWidth,
+          bubbleHeight,
+          12
+        );
+        ctx.fill();
+        ctx.stroke();
+
+        // 말풍선 꼬리
+        ctx.beginPath();
+        const tailX = bubbleX - 30;
+        const tailY = bubbleY + bubbleHeight;
+        ctx.moveTo(tailX, tailY);
+        ctx.lineTo(tailX + 12, tailY);
+        ctx.lineTo(tailX + 4, tailY + 10);
+        ctx.closePath();
+        ctx.fill();
+
+        // 주문 + 농담 텍스트
+        const names = orderPattern.map((t) => ingredients[t].name);
+        const emojis = orderPattern.map((t) => ingredients[t].emoji).join("");
+        const text = "[" + names.join("][") + "]";
+        const full = emojis + " " + text;
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        // 농담
+        ctx.fillStyle = "#444";
+        ctx.font = "11px system-ui";
+        ctx.fillText(currentJoke, bubbleX, bubbleY + bubbleHeight / 2 - 10);
+
+        // 주문
+        ctx.fillStyle = "#222";
+        ctx.font = "bold 13px system-ui";
+        ctx.fillText(full, bubbleX, bubbleY + bubbleHeight / 2 + 12);
+
+        // 현재 스테이지 표시
+        ctx.font = "12px system-ui";
+        ctx.fillStyle = "#f0f0f0";
+        ctx.textAlign = "left";
+        ctx.fillText(`스테이지 ${stage}`, 12, 16);
+      }
+
+      function drawBoard() {
+        // 보드 배경
+        ctx.fillStyle = "#101018";
+        ctx.beginPath();
+        ctx.roundRect(
+          boardOffsetX - 6,
+          boardOffsetY - 6,
+          tileSize * COLS + 12,
+          tileSize * ROWS + 12,
+          18
+        );
+        ctx.fill();
+
+        // 격자 타일
+        const now = performance.now() / 1000;
+        let t = 0;
+        let easeT = 1;
+        if (boardFalling) {
+          t = Math.min((now - fallStartTime) / fallDuration, 1);
+          easeT = t < 1 ? 1 - Math.pow(1 - t, 3) : 1;
+          if (t >= 1) {
+            boardFalling = false;
+          }
+        }
+
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            const tile = grid[r][c];
+            if (!tile) continue;
+            const x = boardOffsetX + c * tileSize;
+            let y;
+
+            if (boardFalling) {
+              const startY = tile.fallStartY ?? boardOffsetY + r * tileSize;
+              const endY = tile.fallEndY ?? boardOffsetY + r * tileSize;
+              y = startY + (endY - startY) * easeT;
+            } else {
+              y = boardOffsetY + r * tileSize;
+            }
+
+            const ingredient = ingredients[tile.type];
+
+            // 타일 배경
+            ctx.fillStyle = ingredient.color;
+            const padding = 4;
+            ctx.beginPath();
+            ctx.roundRect(
+              x + padding,
+              y + padding,
+              tileSize - padding * 2,
+              tileSize - padding * 2,
+              10
+            );
+            ctx.fill();
+
+            // 선택/실패 강조
+            let isSelected = selection.some(
+              (sel) => sel.row === r && sel.col === c
+            );
+            let isInvalid =
+              invalidFeedbackTime > 0 &&
+              invalidSelection.some((sel) => sel.row === r && sel.col === c);
+
+            if (isSelected) {
+              ctx.lineWidth = 3;
+              ctx.strokeStyle = "#ffffff";
+              ctx.stroke();
+            } else if (isInvalid) {
+              ctx.lineWidth = 3;
+              ctx.strokeStyle = "#ff4d4f";
+              ctx.stroke();
+            }
+
+            // 텍스트
+            ctx.fillStyle = "#333";
+            ctx.font = `${Math.floor(tileSize * 0.5)}px system-ui`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(
+              ingredient.emoji,
+              x + tileSize / 2,
+              y + tileSize / 2 - 4
+            );
+
+            ctx.fillStyle = "#333";
+            ctx.font = `${Math.floor(tileSize * 0.23)}px system-ui`;
+            ctx.fillText(
+              ingredient.name,
+              x + tileSize / 2,
+              y + tileSize / 2 + 12
+            );
+          }
+        }
+
+        // 드래그 선
+        if (selection.length > 0) {
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.lineWidth = 3;
+          ctx.lineJoin = "round";
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          for (let i = 0; i < selection.length; i++) {
+            const cell = selection[i];
+            const cx = boardOffsetX + cell.col * tileSize + tileSize / 2;
+            const cy = boardOffsetY + cell.row * tileSize + tileSize / 2;
+            if (i === 0) {
+              ctx.moveTo(cx, cy);
+            } else {
+              ctx.lineTo(cx, cy);
+            }
+          }
+          if (isDragging && selection.length < 3) {
+            ctx.lineTo(currentPointer.x, currentPointer.y);
+          }
+          ctx.stroke();
+        }
+      }
+
+      function draw(dt) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+        drawCustomer();
+        drawBoard();
+      }
+
+      // ===== 메인 루프 =====
+      let lastTime = 0;
+      function loop(timestamp) {
+        const now = timestamp / 1000;
+        const dt = lastTime ? now - lastTime : 0;
+        lastTime = now;
+
+        updateCustomer(dt);
+
+        // 실패 강조 타이머
+        if (invalidFeedbackTime > 0) {
+          invalidFeedbackTime -= dt;
+          if (invalidFeedbackTime <= 0) {
+            invalidFeedbackTime = 0;
+            invalidSelection = [];
+          }
+        }
+
+        draw(dt);
+        requestAnimationFrame(loop);
+      }
+
+      // 초기화
+      resizeCanvas();
+      setupStage();
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"
+    />
+    <title>꼬치가게 - 인게임 테스트</title>
+    <style>
+      :root {
+        --bg: #0f172a; /* 전체 배경(남색) */
+        --panel: #0b1226; /* 패널 배경 */
+        --shop: #13203d; /* 가게 영역 배경 */
+        --board: #0f1e37; /* 보드 영역 배경 */
+        --line: #1f2a44; /* 구분선 */
+        --text: #e6edf7; /* 본문 텍스트 */
+        --muted: #9fb0cc; /* 보조 텍스트 */
+        --accent: #5eead4; /* 포인트 */
+      }
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR",
+          Apple SD Gothic Neo, Arial, sans-serif;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+      }
+      .wrap {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      header {
+        position: relative;
+        z-index: 3;
+        padding: 10px 14px;
+        font-size: 14px;
+        letter-spacing: 0.2px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.04),
+          rgba(255, 255, 255, 0)
+        );
+        border-bottom: 1px solid var(--line);
+      }
+      header .score {
+        font-weight: 700;
+      }
+      header .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .canvases {
+        position: relative;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        background: transparent;
+        image-rendering: optimizeSpeed;
+      }
+      #shop {
+        background: var(--shop);
+        border-bottom: 1px solid var(--line);
+      }
+      #board {
+        background: var(--board);
+      }
+      .rotate-overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+        z-index: 99;
+        text-align: center;
+        padding: 24px;
+      }
+      .rotate-overlay.active {
+        display: flex;
+      }
+      .footer {
+        position: relative;
+        z-index: 2;
+        padding: 8px 14px;
+        font-size: 11px;
+        color: var(--muted);
+        background: linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.04),
+          rgba(255, 255, 255, 0)
+        );
+        border-top: 1px solid var(--line);
+      }
+      /* iOS Safari safe-area */
+      @supports (padding: max(0px)) {
+        header {
+          padding-top: max(10px, env(safe-area-inset-top));
+        }
+        .footer {
+          padding-bottom: max(8px, env(safe-area-inset-bottom));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="score">완료한 주문: <span id="score">0</span></div>
+        <div class="hint">드래그로 같은 재료 연결 → 떼면 터짐</div>
+      </header>
+      <div class="canvases">
+        <canvas id="shop"></canvas>
+        <canvas id="board"></canvas>
+      </div>
+      <div class="footer">
+        ※ 주문은 <b>맨 아래부터 위로</b> 순서대로만 꽂힙니다. 애니메이션 중에는
+        입력이 잠깁니다.
+      </div>
+    </div>
+    <div id="rotate" class="rotate-overlay">
+      세로 모드에 최적화되어 있습니다.<br />기기를 세로로 돌려주세요.
+    </div>
+
+    <script>
+      (() => {
+        // ====== 기본 설정 ======
+        const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+        const shopCanvas = document.getElementById("shop");
+        const boardCanvas = document.getElementById("board");
+        const shopCtx = shopCanvas.getContext("2d");
+        const boardCtx = boardCanvas.getContext("2d");
+        const scoreEl = document.getElementById("score");
+        const rotateOverlay = document.getElementById("rotate");
+
+        // 재료 정의
+        const ING = [
+          {
+            key: "leek",
+            name: "대파",
+            color: "#58c774",
+            text: "파",
+            emoji: "🥬",
+          },
+          {
+            key: "chicken",
+            name: "닭고기",
+            color: "#f5a623",
+            text: "닭",
+            emoji: "🐔",
+          },
+          {
+            key: "beef",
+            name: "소고기",
+            color: "#c23b22",
+            text: "소",
+            emoji: "🥩",
+          },
+          {
+            key: "cheese",
+            name: "치즈",
+            color: "#ffd166",
+            text: "치",
+            emoji: "🧀",
+          },
+        ];
+        const randInt = (n) => (Math.random() * n) | 0;
+        const choice = (arr) => arr[randInt(arr.length)];
+
+        // ====== 상단: 손님/가게 데이터 ======
+        const customers = []; // 3명
+        let completedOrders = 0;
+
+        // 고객 생성
+        function newOrder() {
+          // 3칸 고정, 중복 가능
+          return [choice(ING), choice(ING), choice(ING)];
+        }
+        function makeCustomer(slotIndex) {
+          return {
+            slot: slotIndex, // 0,1,2 (왼,가운데,오)
+            order: newOrder(), // 재료 객체 배열 3개
+            progress: 0, // 0~3
+            alpha: 0, // 페이드 인
+            state: "arriving", // arriving -> waiting -> leaving
+            sayThanksTimer: 0, // 완료 후 잠깐 "감사합니다!"
+            skin: `hsl(${randInt(360)},30%,${60 + randInt(16)}%)`,
+            hair: `hsl(${randInt(360)},45%,${25 + randInt(20)}%)`,
+          };
+        }
+
+        // ====== 하단: 보드(헥스 원형 타일) ======
+        // 그리드 크기(모바일 세로 기준 적당한 밀도)
+        const GRID = { rows: 10, cols: 7 };
+        let R = 20; // 원 반지름 (리사이즈 시 계산)
+        let SX = 2 * R; // 가로 간격 (센터 간)
+        let SY = Math.sqrt(3) * R; // 세로 간격 (센터 간)
+        let OX = 0,
+          OY = 0; // 보드 오프셋
+        const grid = []; // grid[r][c] = Tile or null
+
+        // 타일 데이터
+        function makeTile(ing, r, c, curX, curY, targetX, targetY) {
+          return {
+            ing,
+            r,
+            c,
+            curX,
+            curY,
+            targetX,
+            targetY,
+            moving: false,
+            pulse: 0, // 선택 시 하이라이트
+          };
+        }
+        // 현재 r,c의 캔버스 좌표
+        function posFor(r, c) {
+          const x = OX + R + c * SX + (r % 2) * (SX / 2);
+          const y = OY + R + r * SY;
+          return { x, y };
+        }
+
+        // 이웃(6방향) 판정: odd-r offset
+        function neighbors(r, c) {
+          const odd = r % 2 === 1;
+          const list = [
+            [r, c - 1],
+            [r, c + 1],
+            [r - 1, c],
+            [r + 1, c],
+            [r - 1, odd ? c + 1 : c - 1],
+            [r + 1, odd ? c + 1 : c - 1],
+          ];
+          return list.filter(
+            ([rr, cc]) => rr >= 0 && rr < GRID.rows && cc >= 0 && cc < GRID.cols
+          );
+        }
+        function isNeighbor(a, b) {
+          if (!a || !b) return false;
+          const rr = Math.abs(a.r - b.r);
+          const cc = Math.abs(a.c - b.c);
+          if (rr > 1 || cc > 1) return false;
+          // Exhaustive neighbor check using table above
+          return neighbors(a.r, a.c).some((n) => n[0] === b.r && n[1] === b.c);
+        }
+
+        // ====== 보드 초기화 ======
+        function fillRandom() {
+          for (let r = 0; r < GRID.rows; r++) {
+            grid[r] = [];
+            for (let c = 0; c < GRID.cols; c++) {
+              const ing = choice(ING);
+              const { x, y } = posFor(r, c);
+              grid[r][c] = makeTile(ing, r, c, x, y, x, y);
+            }
+          }
+        }
+
+        // ====== 선택/드래그 상태 ======
+        let selecting = false;
+        let selection = []; // Tile[]
+        let inputLocked = false; // 낙하 중 잠금
+
+        function tileAtPoint(px, py) {
+          // 간단히 전수 검사(작은 격자이므로 충분히 빠름)
+          let best = null,
+            bestD = 1e9;
+          for (let r = 0; r < GRID.rows; r++) {
+            for (let c = 0; c < GRID.cols; c++) {
+              const t = grid[r][c];
+              if (!t) continue;
+              const dx = px - t.curX;
+              const dy = py - t.curY;
+              const d2 = dx * dx + dy * dy;
+              if (d2 < R * R && d2 < bestD) {
+                best = t;
+                bestD = d2;
+              }
+            }
+          }
+          return best;
+        }
+
+        function beginSelect(px, py) {
+          if (inputLocked) return;
+          const t = tileAtPoint(px, py);
+          if (!t) return;
+          selecting = true;
+          selection = [t];
+        }
+        function moveSelect(px, py) {
+          if (!selecting) return;
+          const t = tileAtPoint(px, py);
+          if (!t) return;
+          const start = selection[0];
+          // 같은 재료만
+          if (t.ing.key !== start.ing.key) return;
+          const last = selection[selection.length - 1];
+          if (t === last) return;
+          // 이미 포함된 타일인가? -> 바로 앞이면 백트래킹(되돌리기) 허용
+          const idx = selection.indexOf(t);
+          if (idx >= 0) {
+            if (
+              selection.length >= 2 &&
+              selection[selection.length - 2] === t
+            ) {
+              // 한 칸 되돌리기
+              selection.pop();
+            }
+            return;
+          }
+          // 6방향 이웃만
+          if (isNeighbor(last, t)) {
+            selection.push(t);
+            t.pulse = 1;
+          }
+        }
+        function endSelect() {
+          if (!selecting) {
+            selection = [];
+            return;
+          }
+          selecting = false;
+          // 2개 이상이어야 터짐
+          if (selection.length >= 2) {
+            const poppedIng = selection[0].ing;
+            popSelection(selection);
+            // 주문 진행(한 번 터뜨릴 때 고객당 1칸만 전진)
+            progressCustomers(poppedIng);
+          }
+          // 하이라이트 초기화
+          selection.forEach((t) => (t.pulse = 0));
+          selection = [];
+        }
+
+        // ====== 터뜨리고 낙하 ======
+        function popSelection(list) {
+          // 즉시 제거 → 위에서 아래로 채움(열 단위), 새 타일은 위에서 떨어짐
+          // 입력 잠금
+          inputLocked = true;
+
+          // 제거
+          const marks = new Set();
+          list.forEach((t) => marks.add(`${t.r},${t.c}`));
+          for (const key of marks) {
+            const [r, c] = key.split(",").map(Number);
+            grid[r][c] = null;
+          }
+
+          // 낙하 계산
+          // 각 열 별 아래에서 위로 스캔 → 아래로 압축
+          for (let c = 0; c < GRID.cols; c++) {
+            let write = GRID.rows - 1;
+            for (let r = GRID.rows - 1; r >= 0; r--) {
+              const t = grid[r][c];
+              if (t) {
+                if (r !== write) {
+                  // 이동
+                  grid[write][c] = t;
+                  grid[r][c] = null;
+                  const { x: tx, y: ty } = posFor(write, c);
+                  t.r = write;
+                  t.c = c;
+                  t.targetX = tx;
+                  t.targetY = ty;
+                  t.moving = true;
+                }
+                write--;
+              }
+            }
+            // 비어있는 칸 채우기: 새 타일을 위에서 생성해 떨어뜨림
+            for (let r = write; r >= 0; r--) {
+              const ing = choice(ING);
+              const { x: tx, y: ty } = posFor(r, c);
+              // 위쪽 바깥에서 출발
+              const startY = ty - (write - r + 1) * SY - SY * 1.5;
+              const t = makeTile(ing, r, c, tx, startY, tx, ty);
+              t.moving = true;
+              grid[r][c] = t;
+            }
+          }
+        }
+
+        // ====== 고객 진행/교체 ======
+        function progressCustomers(ing) {
+          let completedNow = 0;
+          for (const cu of customers) {
+            if (cu.state !== "waiting") continue;
+            if (cu.progress >= 3) continue;
+            const need = cu.order[cu.progress];
+            if (need.key === ing.key) {
+              cu.progress++;
+              if (cu.progress >= 3) {
+                cu.state = "leaving";
+                cu.sayThanksTimer = 60; // 1초 정도 메시지 유지(프레임 기반)
+                completedNow++;
+              }
+            }
+          }
+          if (completedNow > 0) {
+            completedOrders += completedNow;
+            scoreEl.textContent = String(completedOrders);
+          }
+        }
+
+        // ====== 리사이즈 / 레이아웃 ======
+        function layout() {
+          const W = window.innerWidth;
+          const H = window.innerHeight;
+          // 세로 모드 권장
+          rotateOverlay.classList.toggle("active", W > H);
+
+          // 상/하 1:1
+          const halfH = Math.floor(H / 2);
+
+          // 캔버스 크기(DPR 반영)
+          function sizeCanvas(canvas, wCss, hCss) {
+            canvas.style.width = wCss + "px";
+            canvas.style.height = hCss + "px";
+            canvas.width = Math.floor(wCss * DPR);
+            canvas.height = Math.floor(hCss * DPR);
+            const ctx = canvas.getContext("2d");
+            ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+          }
+          sizeCanvas(shopCanvas, W, halfH);
+          sizeCanvas(boardCanvas, W, H - halfH);
+
+          // 하단 보드의 원 반지름/간격 산정: (COLS+0.5)*2R <= W, ((ROWS-1)*sqrt(3)+2)*R <= H_half
+          const H2 = H - halfH;
+          const rByW = W / (2 * (GRID.cols + 0.5));
+          const rByH = H2 / ((GRID.rows - 1) * Math.sqrt(3) + 2);
+          R = Math.max(14, Math.floor(Math.min(rByW, rByH))); // 최소 반지름 보장
+          SX = 2 * R;
+          SY = Math.sqrt(3) * R;
+          const usedW = GRID.cols * SX + 0.5 * SX;
+          const usedH = (GRID.rows - 1) * SY + 2 * R;
+          OX = (W - usedW) / 2;
+          OY = (H2 - usedH) / 2;
+
+          // 기존 타일들의 타겟 위치 갱신(리사이즈 즉시 위치 고정)
+          for (let r = 0; r < GRID.rows; r++) {
+            for (let c = 0; c < GRID.cols; c++) {
+              const t = grid[r]?.[c];
+              if (!t) continue;
+              const { x, y } = posFor(r, c);
+              t.curX = t.targetX = x;
+              t.curY = t.targetY = y;
+              t.moving = false;
+            }
+          }
+        }
+
+        // ====== 그리기(상단) ======
+        function drawShop() {
+          const W = shopCanvas.width / DPR;
+          const H = shopCanvas.height / DPR;
+          shopCtx.clearRect(0, 0, W, H);
+
+          // 바닥/테이블 영역
+          // 테이블 3개 배치
+          const tableY = H * 0.65;
+          const tableW = Math.min(140, W / 3 - 24);
+          const tableH = 18;
+          const slotsX = [W * 0.17, W * 0.5, W * 0.83];
+
+          // 배경 장식
+          shopCtx.save();
+          shopCtx.globalAlpha = 0.07;
+          shopCtx.fillStyle = "#ffffff";
+          for (let i = 0; i < 10; i++) {
+            const x = ((i + 1) * W) / 12;
+            shopCtx.fillRect(x, 0, 1, H);
+          }
+          shopCtx.restore();
+
+          // 테이블
+          for (let i = 0; i < 3; i++) {
+            const x = slotsX[i] - tableW / 2;
+            shopCtx.fillStyle = "#2a375a";
+            roundRect(shopCtx, x, tableY, tableW, tableH, 8, true);
+            // 그림자
+            shopCtx.fillStyle = "rgba(0,0,0,.25)";
+            shopCtx.beginPath();
+            shopCtx.ellipse(
+              slotsX[i],
+              tableY + tableH + 8,
+              tableW * 0.45,
+              6,
+              0,
+              0,
+              Math.PI * 2
+            );
+            shopCtx.fill();
+          }
+
+          // 손님
+          customers.forEach((cu, i) => {
+            const x = slotsX[cu.slot];
+            const baseY = tableY - 36;
+            const a = cu.alpha;
+            shopCtx.save();
+            shopCtx.globalAlpha = a;
+
+            // 몸통
+            shopCtx.fillStyle = "#203154";
+            roundRect(shopCtx, x - 22, baseY + 8, 44, 34, 12, true);
+
+            // 얼굴
+            shopCtx.fillStyle = cu.skin;
+            shopCtx.beginPath();
+            shopCtx.arc(x, baseY, 18, 0, Math.PI * 2);
+            shopCtx.fill();
+            // 머리
+            shopCtx.fillStyle = cu.hair;
+            shopCtx.beginPath();
+            shopCtx.arc(x, baseY - 6, 20, Math.PI * 2, 0, true);
+            shopCtx.fill();
+
+            // 말풍선(주문)
+            const bX = x;
+            const bY = baseY - 58;
+            drawSpeechBubble(shopCtx, bX, bY, 74, 60, 8, 8);
+
+            // 꼬치 그림(세로 막대 + 3칸)
+            const stickTopY = bY + 14;
+            shopCtx.strokeStyle = "#caa06b";
+            shopCtx.lineWidth = 3;
+            shopCtx.beginPath();
+            shopCtx.moveTo(bX, stickTopY);
+            shopCtx.lineTo(bX, stickTopY + 36);
+            shopCtx.stroke();
+
+            for (let k = 0; k < 3; k++) {
+              const slotY = stickTopY - 6 - k * 38; // 아래에서 위로
+              const ing = cu.order[k];
+              const filled = k < cu.progress; // 이미 꽂힌 칸
+              shopCtx.save();
+              shopCtx.globalAlpha = filled ? 1 : 0.35;
+              drawIngredientDisc(shopCtx, bX, slotY, 20.5, ing);
+              shopCtx.restore();
+            }
+
+            // 완료 메시지
+            if (cu.state === "leaving" && cu.sayThanksTimer > 0) {
+              shopCtx.fillStyle = "#fff";
+              shopCtx.font =
+                "bold 12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+              shopCtx.textAlign = "center";
+              shopCtx.fillText("고맙습니다!", bX, bY - 10);
+            }
+
+            shopCtx.restore();
+          });
+
+          // 보조 텍스트
+          shopCtx.fillStyle = "rgba(255,255,255,.25)";
+          shopCtx.font =
+            "10px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+          shopCtx.textAlign = "center";
+          shopCtx.fillText(
+            "테이블 3개 · 손님 3명 · 주문은 말풍선에서 확인하세요",
+            W / 2,
+            H - 8
+          );
+        }
+
+        function drawSpeechBubble(ctx, cx, cy, w, h, r, tail) {
+          // 버블
+          ctx.save();
+          ctx.fillStyle = "rgba(15,23,42,.92)";
+          ctx.strokeStyle = "#384a7a";
+          ctx.lineWidth = 1;
+          roundRect(ctx, cx - w / 2, cy - h / 2, w, h, r, true, true);
+          // 꼬리
+          ctx.beginPath();
+          ctx.moveTo(cx - 8, cy + h / 2 - 2);
+          ctx.lineTo(cx + 0, cy + h / 2 + tail);
+          ctx.lineTo(cx + 8, cy + h / 2 - 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // ====== 그리기(하단 보드) ======
+        function drawBoard() {
+          const W = boardCanvas.width / DPR;
+          const H = boardCanvas.height / DPR;
+          boardCtx.clearRect(0, 0, W, H);
+
+          // 보드 외곽 미묘한 테두리
+          boardCtx.save();
+          boardCtx.strokeStyle = "rgba(255,255,255,.06)";
+          boardCtx.strokeRect(0.5, 0.5, W - 1, H - 1);
+          boardCtx.restore();
+
+          // 선택 경로(라인)
+          if (selection.length > 0) {
+            boardCtx.save();
+            boardCtx.lineWidth = 6;
+            boardCtx.lineCap = "round";
+            boardCtx.lineJoin = "round";
+            // 그라데이션 라인
+            const grad = boardCtx.createLinearGradient(0, 0, W, 0);
+            grad.addColorStop(0, "rgba(94,234,212,.3)");
+            grad.addColorStop(1, "rgba(94,234,212,.7)");
+            boardCtx.strokeStyle = grad;
+            boardCtx.beginPath();
+            boardCtx.moveTo(selection[0].curX, selection[0].curY);
+            for (let i = 1; i < selection.length; i++) {
+              boardCtx.lineTo(selection[i].curX, selection[i].curY);
+            }
+            boardCtx.stroke();
+            boardCtx.restore();
+          }
+
+          // 타일 그리기
+          for (let r = 0; r < GRID.rows; r++) {
+            for (let c = 0; c < GRID.cols; c++) {
+              const t = grid[r][c];
+              if (!t) continue;
+
+              // 하이라이트 펄스
+              if (t.pulse > 0) t.pulse = Math.max(0, t.pulse - 0.05);
+
+              // 그림자
+              boardCtx.save();
+              boardCtx.globalAlpha = 0.2;
+              boardCtx.beginPath();
+              boardCtx.ellipse(
+                t.curX,
+                t.curY + R * 0.5,
+                R * 0.8,
+                R * 0.35,
+                0,
+                0,
+                Math.PI * 2
+              );
+              boardCtx.fillStyle = "#000";
+              boardCtx.fill();
+              boardCtx.restore();
+
+              // 본체
+              drawIngredientDisc(
+                boardCtx,
+                t.curX,
+                t.curY,
+                R * 0.92,
+                t.ing,
+                t.pulse
+              );
+            }
+          }
+
+          // 상태 텍스트
+          boardCtx.fillStyle = "rgba(255,255,255,.28)";
+          boardCtx.font =
+            "11px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+          boardCtx.textAlign = "right";
+          boardCtx.fillText(
+            inputLocked ? "채워지는 중…" : "연결하여 터뜨리세요",
+            W - 8,
+            H - 8
+          );
+        }
+
+        function drawIngredientDisc(ctx, x, y, rad, ing, pulse = 0) {
+          const r = rad;
+          // 외곽 링
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          const grad = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+          grad.addColorStop(0, lighten(ing.color, 0.15));
+          grad.addColorStop(1, ing.color);
+          ctx.fillStyle = grad;
+          ctx.fill();
+
+          // 테두리
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255,255,255,.15)";
+          ctx.stroke();
+
+          // 펄스 하이라이트
+          if (pulse > 0) {
+            ctx.globalAlpha = pulse * 0.7;
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "rgba(94,234,212,.9)";
+            ctx.beginPath();
+            ctx.arc(x, y, r - 1, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          // 이모지/문자
+          ctx.save();
+          ctx.font = `${Math.floor(
+            r * 0.95
+          )}px Apple Color Emoji, "Noto Color Emoji", system-ui, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#ffffff";
+          ctx.globalAlpha = 1;
+          ctx.fillText(ing.emoji, x, y + 1);
+          ctx.restore();
+        }
+
+        function roundRect(ctx, x, y, w, h, r, fill = true, stroke = false) {
+          const rr = Math.min(r, w / 2, h / 2);
+          ctx.beginPath();
+          ctx.moveTo(x + rr, y);
+          ctx.arcTo(x + w, y, x + w, y + h, rr);
+          ctx.arcTo(x + w, y + h, x, y + h, rr);
+          ctx.arcTo(x, y + h, x, y, rr);
+          ctx.arcTo(x, y, x + w, y, rr);
+          if (fill) ctx.fill();
+          if (stroke) ctx.stroke();
+        }
+
+        function lighten(hex, amt) {
+          // hex -> hsl 조정 간단 버전
+          const c = parseInt(hex.replace("#", ""), 16);
+          let r = (c >> 16) & 255,
+            g = (c >> 8) & 255,
+            b = c & 255;
+          r = Math.min(255, Math.floor(r + 255 * amt));
+          g = Math.min(255, Math.floor(g + 255 * amt));
+          b = Math.min(255, Math.floor(b + 255 * amt));
+          return `rgb(${r},${g},${b})`;
+        }
+
+        // ====== 루프/업데이트 ======
+        function update() {
+          // 타일 낙하 애니메이션
+          let anyMoving = false;
+          for (let r = 0; r < GRID.rows; r++) {
+            for (let c = 0; c < GRID.cols; c++) {
+              const t = grid[r][c];
+              if (!t) continue;
+              if (t.moving) {
+                const dy = t.targetY - t.curY;
+                const dx = t.targetX - t.curX;
+                // 중력 가속 느낌
+                const sp = Math.max(4, Math.min(24, Math.abs(dy) * 0.25 + 6));
+                if (Math.abs(dx) > 1)
+                  t.curX += Math.sign(dx) * Math.min(Math.abs(dx), sp * 0.4);
+                if (Math.abs(dy) > 1)
+                  t.curY += Math.sign(dy) * Math.min(Math.abs(dy), sp);
+                if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+                  t.curX = t.targetX;
+                  t.curY = t.targetY;
+                  t.moving = false;
+                } else {
+                  anyMoving = true;
+                }
+              }
+            }
+          }
+          if (!anyMoving && inputLocked) {
+            inputLocked = false; // 낙하 마침
+          }
+
+          // 손님 상태
+          customers.forEach((cu) => {
+            if (cu.state === "arriving") {
+              cu.alpha = Math.min(1, cu.alpha + 0.06);
+              if (cu.alpha >= 1) cu.state = "waiting";
+            } else if (cu.state === "leaving") {
+              if (cu.sayThanksTimer > 0) {
+                cu.sayThanksTimer--;
+              } else {
+                cu.alpha = Math.max(0, cu.alpha - 0.06);
+                if (cu.alpha <= 0) {
+                  // 새 손님으로 교체
+                  const slot = cu.slot;
+                  Object.assign(cu, makeCustomer(slot));
+                }
+              }
+            }
+          });
+        }
+
+        function loop() {
+          update();
+          drawShop();
+          drawBoard();
+          requestAnimationFrame(loop);
+        }
+
+        // ====== 입력 처리(마우스 + 터치) ======
+        function getBoardPointFromEvent(e) {
+          const rect = boardCanvas.getBoundingClientRect();
+          let clientX, clientY;
+          if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+          } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+          }
+          const x = clientX - rect.left;
+          const y = clientY - rect.top;
+          return { x, y };
+        }
+        boardCanvas.addEventListener("mousedown", (e) => {
+          const p = getBoardPointFromEvent(e);
+          beginSelect(p.x, p.y);
+        });
+        window.addEventListener("mousemove", (e) => {
+          if (!selecting) return;
+          const p = getBoardPointFromEvent(e);
+          moveSelect(p.x, p.y);
+        });
+        window.addEventListener("mouseup", () => {
+          endSelect();
+        });
+
+        boardCanvas.addEventListener(
+          "touchstart",
+          (e) => {
+            e.preventDefault();
+            const p = getBoardPointFromEvent(e);
+            beginSelect(p.x, p.y);
+          },
+          { passive: false }
+        );
+        window.addEventListener(
+          "touchmove",
+          (e) => {
+            if (!selecting) return;
+            e.preventDefault();
+            const p = getBoardPointFromEvent(e);
+            moveSelect(p.x, p.y);
+          },
+          { passive: false }
+        );
+        window.addEventListener(
+          "touchend",
+          (e) => {
+            e.preventDefault();
+            endSelect();
+          },
+          { passive: false }
+        );
+
+        // ====== 초기화 ======
+        function init() {
+          // 손님 3명 세팅(슬롯 0,1,2)
+          customers.length = 0;
+          customers.push(makeCustomer(0), makeCustomer(1), makeCustomer(2));
+          // 보드
+          fillRandom();
+          layout();
+          loop();
+        }
+
+        window.addEventListener("resize", layout);
+        init();
+      })();
+    </script>
+  </body>
+</html>
