@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>skrrrr2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #05070f;
+        color: #fff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      #game-wrap {
+        border: 2px solid #444;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #151a2a;
+        position: relative;
+      }
+      canvas {
+        display: block;
+        background: linear-gradient(#141b30, #05070f);
+      }
+      .hud {
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 13px;
+        background: rgba(0, 0, 0, 0.55);
+        padding: 6px 12px;
+        border-radius: 999px;
+        backdrop-filter: blur(6px);
+        white-space: nowrap;
+      }
+      .goal-label {
+        position: absolute;
+        right: 12px;
+        top: 8px;
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.55);
+        padding: 4px 10px;
+        border-radius: 999px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-wrap">
+      <canvas id="game" width="960" height="540"></canvas>
+      <div class="hud" id="hud"></div>
+      <div class="goal-label">
+        5R: 가로장애물 · 10R: 가시 · 15R: 이동계단 · 20R: 메테오
+      </div>
+    </div>
+
+    <script>
+      // ===== 기본 세팅 =====
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const hudEl = document.getElementById("hud");
+
+      const W = canvas.width;
+      const H = canvas.height;
+
+      const WORLD_WIDTH = 1400;
+      const WORLD_HEIGHT = 3800;
+      const GROUND_HEIGHT = 60;
+
+      // "기준 FPS" (옛날 값 유지용)
+      const FRAME_RATE = 60;
+      const FRAME_TIME = 1 / FRAME_RATE; // ~0.0167초
+
+      // ===== 물리 상수 (예전 프레임 기준 그대로) =====
+      const H_SPEED = 2.0; // px / frame
+      const JUMP_POWER = 10.5; // px / frame
+      const GRAVITY = 0.55; // px / frame^2
+      const MAX_FALL = 22; // px / frame
+
+      // ===== 플레이어 (미끄러짐 X + 숙이기) =====
+      const STAND_HEIGHT = 64;
+      const CROUCH_HEIGHT = 40;
+
+      const player = {
+        x: 0,
+        y: 0,
+        w: 40,
+        h: STAND_HEIGHT,
+        standHeight: STAND_HEIGHT,
+        crouchHeight: CROUCH_HEIGHT,
+        isCrouching: false,
+        vx: 0, // px / frame
+        vy: 0, // px / frame
+        speed: H_SPEED,
+        jumpPower: JUMP_POWER,
+        onGround: false,
+        facing: 1,
+      };
+
+      // ===== 카메라 =====
+      const camera = {
+        x: 0,
+        y: WORLD_HEIGHT - H,
+      };
+
+      // ===== 계단 / 플랫폼 / 장애물 =====
+      const platforms = []; // 바닥 + 계단
+      let stairs = []; // 계단만
+      let bottomPlatform = null;
+      let flag = null; // 마지막 계단 위 깃발
+
+      const obstacles = []; // 5라운드~ 맵을 가로지르는 가로 장애물
+      const spikes = []; // 10라운드~ 계단 위 가시
+
+      // 20라운드~ 메테오
+      const meteors = [];
+      let meteorCooldown = 0; // 다음 메테오까지 남은 시간(초)
+
+      // 계단 파라미터
+      const STEP_HEIGHT = 70;
+      const PLATFORM_W = 60;
+      const PLATFORM_H = 22;
+      const MIN_EDGE_GAP = 6;
+      const DX_MAX = 90;
+      const SIDE_MARGIN = 80;
+      const FIRST_DX_MAX = 70;
+
+      // ===== 라운드 & 스킨 =====
+      const skins = [
+        { body: "#ffcc66", head: "#ffe4a3", hat: "#60a5fa" },
+        { body: "#fb7185", head: "#fed7aa", hat: "#22c55e" },
+        { body: "#a5b4fc", head: "#e5e7eb", hat: "#f97316" },
+        { body: "#4ade80", head: "#fef3c7", hat: "#6366f1" },
+        { body: "#facc15", head: "#fee2e2", hat: "#0ea5e9" },
+      ];
+      let skinIndex = 0;
+      let clearCount = 0;
+      let roundIndex = 1;
+
+      // ===== 입력 (stuck 방지) =====
+      const keys = {
+        ArrowLeft: false,
+        ArrowRight: false,
+        ArrowDown: false,
+        Space: false,
+      };
+
+      function clearKeys() {
+        for (const k in keys) keys[k] = false;
+      }
+
+      window.addEventListener("keydown", (e) => {
+        if (e.code in keys) {
+          e.preventDefault();
+          keys[e.code] = true;
+        }
+      });
+
+      window.addEventListener("keyup", (e) => {
+        if (e.code in keys) {
+          keys[e.code] = false;
+        }
+      });
+
+      window.addEventListener("blur", clearKeys);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible") clearKeys();
+      });
+
+      // ===== 유틸 =====
+      function randRange(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      function clamp(v, min, max) {
+        return v < min ? min : v > max ? max : v;
+      }
+
+      function rectOverlap(a, b) {
+        return (
+          a.x < b.x + b.w &&
+          a.x + a.w > b.x &&
+          a.y < b.y + b.h &&
+          a.y + a.h > b.y
+        );
+      }
+
+      function updateHUD() {
+        if (!hudEl) return;
+        const stairsCount = 3 + (roundIndex - 1) * 2;
+        hudEl.textContent = `라운드: ${roundIndex} · 계단: ${stairsCount}개 · 클리어: ${clearCount}`;
+      }
+
+      function resetPlayerToBottom() {
+        if (!bottomPlatform) return;
+        player.isCrouching = false;
+        player.h = player.standHeight;
+
+        player.x = bottomPlatform.x + bottomPlatform.w / 2 - player.w / 2;
+        player.y = bottomPlatform.y - player.h;
+        player.vx = 0;
+        player.vy = 0;
+        player.onGround = false;
+
+        camera.x = player.x + player.w / 2 - W / 2;
+        camera.y = WORLD_HEIGHT - H;
+        camera.x = clamp(camera.x, 0, WORLD_WIDTH - W);
+        camera.y = clamp(camera.y, 0, WORLD_HEIGHT - H);
+      }
+
+      // ===== 숙이기 처리 =====
+      function applyCrouch(wasOnGround) {
+        const wantsCrouch = keys.ArrowDown && wasOnGround;
+
+        if (wantsCrouch && !player.isCrouching) {
+          const bottom = player.y + player.h;
+          player.h = player.crouchHeight;
+          player.y = bottom - player.h;
+          player.isCrouching = true;
+        } else if (!wantsCrouch && player.isCrouching) {
+          const bottom = player.y + player.h;
+          player.h = player.standHeight;
+          player.y = bottom - player.h;
+          player.isCrouching = false;
+        }
+      }
+
+      // ===== 이동 계단 업데이트 (15라운드~) =====
+      function updateMovingPlatforms(frameScale) {
+        for (const s of stairs) {
+          if (s.isMoving) {
+            s.x += s.vx * frameScale;
+            if (s.x < s.left) {
+              s.x = s.left;
+              s.vx *= -1;
+            } else if (s.x > s.right) {
+              s.x = s.right;
+              s.vx *= -1;
+            }
+          }
+        }
+      }
+
+      // ===== 가시 애니메이션 (10라운드~) =====
+      function updateSpikes(frameScale) {
+        for (const spike of spikes) {
+          spike.phase += spike.speed * frameScale; // speed: cycles per frame
+          if (spike.phase >= 1) spike.phase -= 1;
+        }
+      }
+
+      function spikeIsUp(spike) {
+        // 위로 노출되는 시간 50% (phase 0.5~1)
+        return spike.phase > 0.5;
+      }
+
+      // ===== 메테오 업데이트 (20라운드~) =====
+      function updateMeteors(dt, frameScale) {
+        if (roundIndex >= 20) {
+          // 스폰 타이머
+          meteorCooldown -= dt;
+          if (meteorCooldown <= 0) {
+            // 하늘(현재 카메라 위쪽)에서 랜덤 X로 스폰
+            const spawnX = randRange(0, WORLD_WIDTH);
+            const spawnY = camera.y - 120;
+
+            // 약간 플레이어 쪽으로 기울어지게
+            const targetX = player.x + player.w / 2 + randRange(-120, 120);
+            const targetY = player.y + player.h / 2;
+            let dx = targetX - spawnX;
+            let dy = targetY - spawnY;
+            const len = Math.hypot(dx, dy) || 1;
+            dx /= len;
+            dy /= len;
+
+            const speedPerFrame = 4 + Math.random() * 3; // px / frame
+            meteors.push({
+              x: spawnX,
+              y: spawnY,
+              vx: dx * speedPerFrame,
+              vy: dy * speedPerFrame,
+              r: randRange(10, 18),
+            });
+
+            // 다음 메테오까지 0.8~1.6초 랜덤
+            meteorCooldown = randRange(2, 7);
+          }
+        } else {
+          // 20라운드 전에는 메테오 없음
+          meteors.length = 0;
+          meteorCooldown = 0;
+        }
+
+        // 이동
+        for (const m of meteors) {
+          m.x += m.vx * frameScale;
+          m.y += m.vy * frameScale;
+        }
+
+        // 화면 밖으로 많이 나간 메테오 제거
+        for (let i = meteors.length - 1; i >= 0; i--) {
+          const m = meteors[i];
+          if (m.y > camera.y + H + 200 || m.y > WORLD_HEIGHT + 200) {
+            meteors.splice(i, 1);
+          }
+        }
+      }
+
+      // ===== 레벨 생성 =====
+      function generateLevel() {
+        roundIndex = clearCount + 1;
+        const stairsCount = 3 + (roundIndex - 1) * 2;
+
+        stairs = [];
+        platforms.length = 0;
+        obstacles.length = 0;
+        spikes.length = 0;
+        meteors.length = 0;
+        meteorCooldown = 0;
+        bottomPlatform = null;
+        flag = null;
+
+        const floorY = WORLD_HEIGHT - GROUND_HEIGHT;
+
+        // 1) 바닥 발판
+        const bottomW = 260;
+        const bottomX = WORLD_WIDTH / 2 - bottomW / 2;
+        const bottomY = floorY - 20;
+        bottomPlatform = { x: bottomX, y: bottomY, w: bottomW, h: 20 };
+        platforms.push(bottomPlatform);
+
+        const minCenterX = SIDE_MARGIN + PLATFORM_W / 2;
+        const maxCenterX = WORLD_WIDTH - SIDE_MARGIN - PLATFORM_W / 2;
+
+        // 2) 첫 계단
+        let y = bottomY - STEP_HEIGHT;
+        const bottomCenter = bottomX + bottomW / 2;
+        let firstCenter = bottomCenter + randRange(-FIRST_DX_MAX, FIRST_DX_MAX);
+        firstCenter = clamp(firstCenter, minCenterX, maxCenterX);
+
+        const firstStair = {
+          x: firstCenter - PLATFORM_W / 2,
+          y,
+          w: PLATFORM_W,
+          h: PLATFORM_H,
+          index: 0,
+        };
+        stairs.push(firstStair);
+        platforms.push(firstStair);
+
+        // 3) 이후 계단들
+        let prev = firstStair;
+        y -= STEP_HEIGHT;
+
+        const dxMin = PLATFORM_W + MIN_EDGE_GAP;
+
+        for (let i = 1; i < stairsCount; i++) {
+          const prevCenter = prev.x + prev.w / 2;
+          const intervals = [];
+
+          // 오른쪽
+          {
+            const rightMinCenter = prevCenter + dxMin;
+            const rightMaxCenter = prevCenter + DX_MAX;
+            if (rightMinCenter <= maxCenterX) {
+              const from = clamp(rightMinCenter, minCenterX, maxCenterX);
+              const to = clamp(rightMaxCenter, minCenterX, maxCenterX);
+              if (from <= to) intervals.push({ from, to });
+            }
+          }
+
+          // 왼쪽
+          {
+            const leftMaxCenter = prevCenter - dxMin;
+            const leftMinCenter = prevCenter - DX_MAX;
+            if (leftMaxCenter >= minCenterX) {
+              const from = clamp(leftMinCenter, minCenterX, maxCenterX);
+              const to = clamp(leftMaxCenter, minCenterX, maxCenterX);
+              if (from <= to) intervals.push({ from, to });
+            }
+          }
+
+          let centerX;
+          if (intervals.length === 0) {
+            centerX = clamp(prevCenter, minCenterX, maxCenterX);
+          } else {
+            const chosen =
+              intervals[Math.floor(Math.random() * intervals.length)];
+            centerX = randRange(chosen.from, chosen.to);
+          }
+
+          const stair = {
+            x: centerX - PLATFORM_W / 2,
+            y,
+            w: PLATFORM_W,
+            h: PLATFORM_H,
+            index: i,
+          };
+          stairs.push(stair);
+          platforms.push(stair);
+
+          prev = stair;
+          y -= STEP_HEIGHT;
+        }
+
+        // 4) 마지막 계단 위 깃발
+        const goalStair = stairs[stairs.length - 1];
+        const FLAG_W = 32;
+        const FLAG_H = 64;
+        flag = {
+          x: goalStair.x + goalStair.w / 2 - FLAG_W / 2,
+          y: goalStair.y - FLAG_H,
+          w: FLAG_W,
+          h: FLAG_H,
+        };
+
+        // 5) 15라운드~ : 이동 계단
+        if (roundIndex >= 15) {
+          const movableCandidates = stairs.slice(1, stairs.length - 1); // 첫/마지막 제외
+          for (const stair of movableCandidates) {
+            if (Math.random() < 0.3) {
+              // 30% 정도만 이동 계단
+              const rangeLeft = SIDE_MARGIN;
+              const rangeRight = WORLD_WIDTH - SIDE_MARGIN - stair.w;
+              stair.isMoving = true;
+              stair.left = rangeLeft;
+              stair.right = rangeRight;
+              const speedPerFrame = 0.6 + Math.random() * 0.6; // px / frame
+              stair.vx = (Math.random() < 0.5 ? -1 : 1) * speedPerFrame;
+            }
+          }
+        }
+
+        // 6) 10라운드~ : 계단 위 가시
+        // 6) 10라운드~ : 계단 위 가시
+        if (roundIndex >= 10) {
+          // 이동 계단(stair.isMoving === true)은 제외
+          const spikeCandidates = stairs
+            .slice(1, stairs.length - 1) // 첫/마지막 제외
+            .filter((stair) => !stair.isMoving); // isMoving 아닌 것만
+
+          let consecutive = 0; // 연속 가시 개수
+
+          for (const stair of spikeCandidates) {
+            const wantSpike = Math.random() < 0.4; // 기본 확률
+
+            if (wantSpike && consecutive < 2) {
+              // 가시 생성 허용 (최대 2연속)
+              const w = stair.w * 0.9;
+              const h = 14;
+              const offsetX = (stair.w - w) / 2;
+
+              const speedPerFrame = 0.003; // cycles / frame (느리게)
+
+              spikes.push({
+                platform: stair,
+                w,
+                h,
+                offsetX,
+                phase: Math.random(), // 0~1
+                speed: speedPerFrame, // cycles per frame
+              });
+
+              consecutive += 1;
+            } else {
+              // 이번 계단은 가시 없음 → 연속 끊기
+              consecutive = 0;
+            }
+          }
+        }
+
+        // 7) 5라운드~ : 맵 전체를 가로지르는 가로 장애물
+        if (roundIndex >= 5) {
+          const candidates = stairs.slice(1, stairs.length - 1);
+          for (const stair of candidates) {
+            if (Math.random() < 0.4) {
+              const obsW = stair.w * 0.7;
+              const obsH = 18;
+
+              const rangeLeft = SIDE_MARGIN;
+              const rangeRight = WORLD_WIDTH - SIDE_MARGIN - obsW;
+              const startX = randRange(rangeLeft, rangeRight);
+
+              const bottomY = stair.y - 48;
+              const obsY = bottomY - obsH;
+
+              const speedPerFrame = 1.2 + Math.random() * 0.8; // px / frame
+              const dir = Math.random() < 0.5 ? -1 : 1;
+
+              obstacles.push({
+                x: startX,
+                y: obsY,
+                w: obsW,
+                h: obsH,
+                vx: speedPerFrame * dir, // px / frame
+                left: rangeLeft,
+                right: rangeRight,
+                type: "bar",
+              });
+            }
+          }
+        }
+
+        resetPlayerToBottom();
+        updateHUD();
+      }
+
+      function handleLevelClear() {
+        clearCount++;
+        skinIndex = (skinIndex + 1) % skins.length;
+        generateLevel();
+      }
+
+      // ===== 업데이트 (dt: 초 단위 → frameScale로 환산) =====
+      function update(dt) {
+        // 이번 프레임이 "몇 프레임 분량"인지
+        let frameScale = dt / FRAME_TIME; // dt * 60
+        if (frameScale > 3) frameScale = 3; // 너무 튀는 거 방지
+
+        const prevBottom = player.y + player.h;
+        const wasOnGround = player.onGround;
+
+        // 숙이기
+        applyCrouch(wasOnGround);
+
+        // 방향 입력
+        let dir = 0;
+        if (keys.ArrowLeft) dir -= 1;
+        if (keys.ArrowRight) dir += 1;
+
+        // 공중에서도 바라보는 방향만 변경
+        if (dir !== 0) {
+          player.facing = dir;
+        }
+
+        // 지상일 때만 좌우 속도 변경 (px/frame)
+        if (wasOnGround) {
+          if (dir !== 0) {
+            player.vx = dir * player.speed;
+          } else {
+            player.vx = 0;
+          }
+        }
+
+        // 점프 (지상일 때만, vy 단위: px/frame)
+        if (keys.Space && wasOnGround) {
+          player.vy = -player.jumpPower;
+          player.onGround = false;
+        }
+
+        // 중력 (px/frame^2 × frameScale = px/frame)
+        player.vy += GRAVITY * frameScale;
+        if (player.vy > MAX_FALL) player.vy = MAX_FALL;
+
+        // 이동 계단 업데이트
+        updateMovingPlatforms(frameScale);
+
+        // 플레이어 이동 (vx, vy: px/frame → frameScale 곱)
+        player.x += player.vx * frameScale;
+        player.y += player.vy * frameScale;
+
+        // 가로 경계
+        if (player.x < 0) {
+          player.x = 0;
+          player.vx = 0;
+        }
+        if (player.x + player.w > WORLD_WIDTH) {
+          player.x = WORLD_WIDTH - player.w;
+          player.vx = 0;
+        }
+
+        let bottomNow = player.y + player.h;
+        player.onGround = false;
+
+        // 1) 바닥 충돌
+        const floorY = WORLD_HEIGHT - GROUND_HEIGHT;
+        if (bottomNow > floorY && prevBottom <= floorY && player.vy >= 0) {
+          player.y = floorY - player.h;
+          player.vy = 0;
+          player.onGround = true;
+          bottomNow = player.y + player.h;
+        }
+
+        // 2) 계단/플랫폼 충돌 (위에서 떨어질 때만)
+        for (const p of platforms) {
+          const surfaceY = p.y;
+          const px1 = p.x;
+          const px2 = p.x + p.w;
+
+          const cx1 = player.x;
+          const cx2 = player.x + player.w;
+
+          const horizontallyOverlapping = cx2 > px1 && cx1 < px2;
+          const isFalling = player.vy >= 0;
+          const wasAbove = prevBottom <= surfaceY;
+
+          if (
+            horizontallyOverlapping &&
+            isFalling &&
+            bottomNow >= surfaceY &&
+            wasAbove
+          ) {
+            player.y = surfaceY - player.h;
+            player.vy = 0;
+            player.onGround = true;
+            bottomNow = player.y + player.h;
+          }
+        }
+
+        // 낙사 처리
+        if (player.y > WORLD_HEIGHT + 200) {
+          resetPlayerToBottom();
+        }
+
+        // 3) 가로 장애물 이동
+        for (const o of obstacles) {
+          o.x += o.vx * frameScale;
+          if (o.x < o.left) {
+            o.x = o.left;
+            o.vx *= -1;
+          } else if (o.x > o.right) {
+            o.x = o.right;
+            o.vx *= -1;
+          }
+        }
+
+        // 4) 가시 애니메이션
+        updateSpikes(frameScale);
+
+        // 5) 메테오 업데이트 (20R~)
+        updateMeteors(dt, frameScale);
+
+        // 6) 카메라
+        const targetCamX = player.x + player.w / 2 - W / 2;
+        const targetCamY = player.y + player.h / 2 - H / 2;
+        camera.x += (targetCamX - camera.x) * 0.18;
+        camera.y += (targetCamY - camera.y) * 0.18;
+        camera.x = clamp(camera.x, 0, WORLD_WIDTH - W);
+        camera.y = clamp(camera.y, 0, WORLD_HEIGHT - H);
+
+        // 7) 깃발 도달
+        if (flag) {
+          const playerRect = {
+            x: player.x,
+            y: player.y,
+            w: player.w,
+            h: player.h,
+          };
+          if (rectOverlap(playerRect, flag)) {
+            handleLevelClear();
+            return;
+          }
+        }
+
+        // 8) 장애물 / 가시 / 메테오 충돌 체크
+        const playerRect = {
+          x: player.x,
+          y: player.y,
+          w: player.w,
+          h: player.h,
+        };
+
+        // 가로 장애물
+        for (const o of obstacles) {
+          if (rectOverlap(playerRect, o)) {
+            resetPlayerToBottom();
+            return;
+          }
+        }
+
+        // 가시 (위로 나왔을 때만)
+        for (const spike of spikes) {
+          if (!spikeIsUp(spike)) continue;
+          const px = spike.platform.x + spike.offsetX;
+          const py = spike.platform.y - spike.h;
+          const spikeRect = { x: px, y: py, w: spike.w, h: spike.h };
+          if (rectOverlap(playerRect, spikeRect)) {
+            resetPlayerToBottom();
+            return;
+          }
+        }
+
+        // 메테오: 원으로 보지만 충돌은 사각으로
+        for (const m of meteors) {
+          const mr = m.r;
+          const meteorRect = {
+            x: m.x - mr,
+            y: m.y - mr,
+            w: mr * 2,
+            h: mr * 2,
+          };
+          if (rectOverlap(playerRect, meteorRect)) {
+            resetPlayerToBottom();
+            return;
+          }
+        }
+      }
+
+      // ===== 그리기 =====
+      function drawBackground() {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, "#1b2444");
+        g.addColorStop(1, "#05070f");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+
+        // 뒤쪽 나무 실루엣
+        ctx.save();
+        ctx.translate(-camera.x * 0.25, -camera.y * 0.18);
+        ctx.fillStyle = "#12172b";
+
+        const spacing = 220;
+        for (
+          let x = -spacing * 2;
+          x < WORLD_WIDTH + spacing * 2;
+          x += spacing
+        ) {
+          const baseY = WORLD_HEIGHT;
+          ctx.fillRect(x, baseY - 600, 26, 600);
+          ctx.beginPath();
+          ctx.moveTo(x - 40, baseY - 600);
+          ctx.lineTo(x + 13, baseY - 660);
+          ctx.lineTo(x + 66, baseY - 600);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      function drawPlatformsAndHazards() {
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+
+        // 바닥
+        ctx.fillStyle = "#25293d";
+        ctx.fillRect(
+          0,
+          WORLD_HEIGHT - GROUND_HEIGHT,
+          WORLD_WIDTH,
+          GROUND_HEIGHT
+        );
+        ctx.fillStyle = "#3b435f";
+        ctx.fillRect(0, WORLD_HEIGHT - GROUND_HEIGHT, WORLD_WIDTH, 5);
+
+        // 계단
+        for (const p of platforms) {
+          ctx.fillStyle = "#2d354f";
+          ctx.fillRect(p.x, p.y, p.w, p.h);
+          ctx.fillStyle = "#48527a";
+          ctx.fillRect(p.x, p.y, p.w, 4);
+
+          // 이동 계단 테두리 강조
+          if (p.isMoving) {
+            ctx.strokeStyle = "#38bdf8";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(p.x + 1, p.y + 1, p.w - 2, p.h - 2);
+          }
+        }
+
+        // 가로 장애물
+        for (const o of obstacles) {
+          ctx.fillStyle = "#b91c1c";
+          ctx.fillRect(o.x, o.y, o.w, o.h);
+          ctx.fillStyle = "#fecaca";
+          ctx.fillRect(o.x, o.y, o.w, 3);
+        }
+
+        // 가시
+        for (const spike of spikes) {
+          if (!spikeIsUp(spike)) continue;
+          const px = spike.platform.x + spike.offsetX;
+          const py = spike.platform.y - spike.h;
+          const step = spike.w / 5;
+
+          ctx.fillStyle = "#f87171";
+          for (let i = 0; i < 5; i++) {
+            const sx = px + i * step;
+            ctx.beginPath();
+            ctx.moveTo(sx, py + spike.h);
+            ctx.lineTo(sx + step / 2, py);
+            ctx.lineTo(sx + step, py + spike.h);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+
+        // 메테오
+        for (const m of meteors) {
+          ctx.save();
+          // 꼬리
+          ctx.strokeStyle = "rgba(248, 250, 252, 0.5)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(m.x - m.vx * 4, m.y - m.vy * 4);
+          ctx.lineTo(m.x, m.y);
+          ctx.stroke();
+
+          // 코어
+          const grd = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.r);
+          grd.addColorStop(0, "#fde68a");
+          grd.addColorStop(0.4, "#f97316");
+          grd.addColorStop(1, "rgba(15, 23, 42, 0)");
+          ctx.fillStyle = grd;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // 깃발
+        if (flag) {
+          const gx = flag.x + flag.w / 2;
+          ctx.fillStyle = "#fcd34d";
+          ctx.fillRect(gx - 6, flag.y, 12, flag.h);
+          ctx.fillStyle = "#f97316";
+          ctx.fillRect(gx, flag.y + 6, flag.w, flag.h / 2.2);
+        }
+
+        ctx.restore();
+      }
+
+      function drawPlayer() {
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+
+        const skin = skins[skinIndex];
+
+        // 그림자
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        const shadowW = 40;
+        const shadowH = 10;
+        const shadowX = player.x + player.w / 2 - shadowW / 2;
+        const shadowY = player.y + player.h + 8;
+        ctx.beginPath();
+        ctx.ellipse(
+          shadowX + shadowW / 2,
+          shadowY,
+          shadowW / 2,
+          shadowH / 2,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+
+        // 키에 비례한 머리/몸
+        const headH = Math.floor(player.h * 0.4);
+        const bodyH = player.h - headH;
+
+        // 몸통
+        ctx.fillStyle = skin.body;
+        ctx.fillRect(player.x, player.y + headH, player.w, bodyH);
+
+        // 머리
+        ctx.fillStyle = skin.head;
+        ctx.fillRect(player.x, player.y, player.w, headH);
+
+        // 눈
+        ctx.fillStyle = "#333";
+        const eyeY = player.y + Math.floor(headH * 0.45);
+        if (player.facing >= 0) {
+          ctx.fillRect(player.x + player.w - 14, eyeY, 4, 4);
+        } else {
+          ctx.fillRect(player.x + 10, eyeY, 4, 4);
+        }
+
+        // 모자
+        ctx.fillStyle = skin.hat;
+        ctx.fillRect(player.x - 4, player.y - 4, player.w + 8, 6);
+
+        ctx.restore();
+      }
+
+      // ===== 루프 (시간 → frameScale) =====
+      let lastTime = 0;
+      function loop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        let dt = (timestamp - lastTime) / 1000; // 초 단위
+        lastTime = timestamp;
+
+        update(dt);
+        ctx.clearRect(0, 0, W, H);
+        drawBackground();
+        drawPlatformsAndHazards();
+        drawPlayer();
+        requestAnimationFrame(loop);
+      }
+
+      // ===== 시작 =====
+      generateLevel();
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>
