@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>메이플 스타일 점프 게임 데모</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #0b1020;
+        color: #fff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      #game-wrap {
+        border: 2px solid #444;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #151a2a;
+      }
+      canvas {
+        display: block;
+        background: linear-gradient(#1c2340, #151a2a);
+      }
+      .hud {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 14px;
+        background: rgba(0, 0, 0, 0.45);
+        padding: 6px 10px;
+        border-radius: 999px;
+        backdrop-filter: blur(6px);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-wrap" style="position: relative">
+      <canvas id="game" width="960" height="540"></canvas>
+      <div class="hud">← / → / A / D : 이동 · Space / ↑ : 점프</div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+
+      const W = canvas.width;
+      const H = canvas.height;
+
+      // 월드 크기 (스크롤 되게)
+      const WORLD_WIDTH = 3000;
+      const WORLD_HEIGHT = H;
+
+      // 플레이어
+      const player = {
+        x: 200,
+        y: 0,
+        w: 40,
+        h: 64,
+        vx: 0,
+        vy: 0,
+        speed: 5,
+        jumpPower: 16,
+        onGround: false,
+        facing: 1, // 1: 오른쪽, -1: 왼쪽
+      };
+
+      // 물리
+      const gravity = 0.8;
+      const friction = 0.8;
+      const maxFall = 25;
+
+      // 바닥
+      const groundHeight = 80;
+
+      // 플랫폼들 (x, y, w, h)
+      const platforms = [
+        { x: 100, y: WORLD_HEIGHT - groundHeight - 80, w: 200, h: 20 },
+        { x: 450, y: WORLD_HEIGHT - groundHeight - 140, w: 200, h: 20 },
+        { x: 800, y: WORLD_HEIGHT - groundHeight - 220, w: 220, h: 20 },
+        { x: 1200, y: WORLD_HEIGHT - groundHeight - 120, w: 220, h: 20 },
+        { x: 1650, y: WORLD_HEIGHT - groundHeight - 200, w: 260, h: 20 },
+        { x: 2100, y: WORLD_HEIGHT - groundHeight - 160, w: 220, h: 20 },
+        { x: 2500, y: WORLD_HEIGHT - groundHeight - 230, w: 260, h: 20 },
+      ];
+
+      // 입력
+      const keys = {};
+      window.addEventListener("keydown", (e) => {
+        if (
+          [
+            "ArrowLeft",
+            "ArrowRight",
+            "ArrowUp",
+            "Space",
+            "KeyA",
+            "KeyD",
+          ].includes(e.code)
+        ) {
+          e.preventDefault();
+        }
+        keys[e.code] = true;
+      });
+      window.addEventListener("keyup", (e) => {
+        keys[e.code] = false;
+      });
+
+      // 카메라
+      const camera = {
+        x: 0,
+        y: 0,
+      };
+
+      function update() {
+        // 좌우 움직임
+        let dir = 0;
+        if (keys["ArrowLeft"] || keys["KeyA"]) dir -= 1;
+        if (keys["ArrowRight"] || keys["KeyD"]) dir += 1;
+
+        player.vx += dir * 0.8;
+
+        // 속도 제한 살짝
+        player.vx = Math.max(Math.min(player.vx, player.speed), -player.speed);
+
+        if (dir !== 0) {
+          player.facing = dir;
+        }
+
+        // 점프
+        if ((keys["Space"] || keys["ArrowUp"]) && player.onGround) {
+          player.vy = -player.jumpPower;
+          player.onGround = false;
+        }
+
+        // 중력
+        player.vy += gravity;
+        if (player.vy > maxFall) player.vy = maxFall;
+
+        // 이동 적용
+        player.x += player.vx;
+        player.y += player.vy;
+
+        // 마찰
+        if (player.onGround && dir === 0) {
+          player.vx *= friction;
+          if (Math.abs(player.vx) < 0.05) player.vx = 0;
+        }
+
+        // 월드 경계
+        if (player.x < 0) {
+          player.x = 0;
+          player.vx = 0;
+        }
+        if (player.x + player.w > WORLD_WIDTH) {
+          player.x = WORLD_WIDTH - player.w;
+          player.vx = 0;
+        }
+
+        // 충돌 처리 (먼저 공중이라고 가정)
+        player.onGround = false;
+
+        // 바닥과 충돌
+        const floorY = WORLD_HEIGHT - groundHeight;
+        if (player.y + player.h > floorY) {
+          player.y = floorY - player.h;
+          player.vy = 0;
+          player.onGround = true;
+        }
+
+        // 플랫폼 충돌 (간단히 위에서 내려올 때만)
+        for (const p of platforms) {
+          const px1 = p.x;
+          const px2 = p.x + p.w;
+          const py1 = p.y;
+          const py2 = p.y + p.h;
+
+          const cx1 = player.x;
+          const cx2 = player.x + player.w;
+          const cy1 = player.y;
+          const cy2 = player.y + player.h;
+
+          const horizontallyOverlapping = cx2 > px1 && cx1 < px2;
+          const wasAbove = cy2 - player.vy <= py1;
+          const isFalling = player.vy >= 0;
+
+          if (horizontallyOverlapping && isFalling && cy2 > py1 && wasAbove) {
+            player.y = py1 - player.h;
+            player.vy = 0;
+            player.onGround = true;
+          }
+        }
+
+        // 카메라: 플레이어를 가운데 근처에 두기
+        camera.x = player.x + player.w / 2 - W / 2;
+        if (camera.x < 0) camera.x = 0;
+        if (camera.x > WORLD_WIDTH - W) camera.x = WORLD_WIDTH - W;
+      }
+
+      function drawBackground() {
+        // 하늘
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, "#202a5a");
+        g.addColorStop(1, "#151726");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+
+        // 뒤 배경 산
+        ctx.save();
+        ctx.translate(-camera.x * 0.3, 0); // 패럴랙스
+        ctx.fillStyle = "#1e243f";
+        ctx.beginPath();
+        ctx.moveTo(-200, H);
+        ctx.lineTo(200, 260);
+        ctx.lineTo(600, H);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(400, H);
+        ctx.lineTo(900, 230);
+        ctx.lineTo(1400, H);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(1200, H);
+        ctx.lineTo(1700, 250);
+        ctx.lineTo(2200, H);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      function drawGroundAndPlatforms() {
+        ctx.save();
+        ctx.translate(-camera.x, 0);
+
+        // 바닥
+        ctx.fillStyle = "#242a3d";
+        ctx.fillRect(0, WORLD_HEIGHT - groundHeight, WORLD_WIDTH, groundHeight);
+
+        // 바닥 상단 라인
+        ctx.fillStyle = "#3b435f";
+        ctx.fillRect(0, WORLD_HEIGHT - groundHeight, WORLD_WIDTH, 6);
+
+        // 플랫폼
+        for (const p of platforms) {
+          ctx.fillStyle = "#2e3550";
+          ctx.fillRect(p.x, p.y, p.w, p.h);
+          ctx.fillStyle = "#454f78";
+          ctx.fillRect(p.x, p.y, p.w, 4);
+        }
+
+        ctx.restore();
+      }
+
+      function drawPlayer() {
+        ctx.save();
+        ctx.translate(-camera.x, 0);
+
+        // 그림자
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        const shadowY = WORLD_HEIGHT - groundHeight + 5;
+        const shadowW = 40;
+        const shadowH = 10;
+        const shadowX = player.x + player.w / 2 - shadowW / 2;
+        ctx.beginPath();
+        ctx.ellipse(
+          shadowX + shadowW / 2,
+          shadowY,
+          shadowW / 2,
+          shadowH / 2,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+
+        // 몸통
+        ctx.fillStyle = "#ffcc66";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+
+        // 머리
+        ctx.fillStyle = "#ffe4a3";
+        const headH = 26;
+        ctx.fillRect(player.x, player.y - headH + 4, player.w, headH);
+
+        // 간단한 얼굴
+        ctx.fillStyle = "#333";
+        const eyeY = player.y - headH + 12;
+        if (player.facing >= 0) {
+          ctx.fillRect(player.x + 24, eyeY, 4, 4);
+        } else {
+          ctx.fillRect(player.x + 12, eyeY, 4, 4);
+        }
+
+        // 간단한 장비(모자)
+        ctx.fillStyle = "#66aaff";
+        ctx.fillRect(player.x - 4, player.y - headH, player.w + 8, 8);
+
+        ctx.restore();
+      }
+
+      function drawForeground() {
+        // 필요하면 여기에 추가 (예: UI, 앞쪽 장식 등)
+      }
+
+      function loop() {
+        update();
+
+        ctx.clearRect(0, 0, W, H);
+        drawBackground();
+        drawGroundAndPlatforms();
+        drawPlayer();
+        drawForeground();
+
+        requestAnimationFrame(loop);
+      }
+
+      loop();
+    </script>
+  </body>
+</html>
