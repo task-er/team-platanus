@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>팀 소개 및 수익 구조 안내</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <style>
+      @font-face {
+        font-family: "ChosunIlboMyungjo";
+        src: url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/Chosunilbo_myungjo.woff")
+          format("woff");
+        font-weight: normal;
+        font-display: block;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "ChosunIlboMyungjo", system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #faf7f2;
+        color: #222;
+      }
+
+      .page {
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 40px 16px;
+      }
+
+      .intro-section {
+        max-width: 720px;
+        width: 100%;
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 32px 28px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+        line-height: 1.8;
+        font-size: 16px;
+      }
+
+      .intro-section p {
+        margin: 0 0 16px;
+      }
+
+      .intro-section p:last-child {
+        margin-bottom: 0;
+      }
+
+      .intro-section strong {
+        font-weight: 800;
+      }
+
+      /* 탭 스타일 */
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid #eee0d0;
+      }
+
+      .tab {
+        border: 0;
+        background: transparent;
+        padding: 10px 16px;
+        margin: 0;
+        font-family: inherit;
+        font-size: 15px;
+        cursor: pointer;
+        border-radius: 16px 16px 0 0;
+        color: #8c7a60;
+      }
+
+      .tab.active {
+        background: #faf7f2;
+        color: #222;
+        font-weight: 700;
+        border-bottom: 2px solid #222;
+      }
+
+      .tab-panel {
+        display: none;
+      }
+
+      .tab-panel.active {
+        display: block;
+      }
+
+      @media (max-width: 600px) {
+        .page {
+          padding: 24px 12px;
+        }
+
+        .intro-section {
+          padding: 24px 18px;
+          border-radius: 12px;
+          font-size: 15px;
+        }
+
+        .tabs {
+          overflow-x: auto;
+        }
+
+        .tab {
+          white-space: nowrap;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main class="page">
+      <section class="intro-section">
+        <!-- 탭 헤더 -->
+        <div class="tabs" role="tablist">
+          <button
+            class="tab active"
+            data-tab-target="recruit"
+            type="button"
+            role="tab"
+            aria-selected="true"
+          >
+            모집글
+          </button>
+          <button
+            class="tab"
+            data-tab-target="team"
+            type="button"
+            role="tab"
+            aria-selected="false"
+          >
+            팀소개
+          </button>
+        </div>
+
+        <!-- 게임 아트 모집글 탭 -->
+        <div
+          class="tab-panel active"
+          id="tab-recruit"
+          role="tabpanel"
+          aria-label="게임 아트 모집글"
+        >
+          <h2>모집 포지션</h2>
+          <p>게임 아트 일러스트(캐릭터,배경,UI)</p>
+
+          <h2>작업 기간</h2>
+          <p>
+            - 약 3개월 내외 (불필요하게 볼륨을 키우지 않고 3개월 완성을 목표로
+            하고 있습니다.)
+          </p>
+
+          <h2>게임 장르</h2>
+          <p>
+            - 2D 캐주얼 퍼즐형게임<br />- 한붓그리기 형태로 고려중
+            <a
+              href="https://www.youtube.com/watch?v=O89Da3nQoHo"
+              onclick="window.open(
+    'https:\/\/www.youtube.com/watch?v=O89Da3nQoHo',
+    'example',
+    'width=800,height=600,noopener,noreferrer'
+  ); return false;"
+            >
+              [예시1]</a
+            ><a
+              href="https://www.youtube.com/watch?v=csL0bY12RQw&t=14s"
+              onclick="window.open(
+    'https:\/\/www.youtube.com/watch?v=csL0bY12RQw&t=14s',
+    'example',
+    'width=800,height=600,noopener,noreferrer'
+  ); return false;"
+              >[예시2]</a
+            >
+          </p>
+
+          <h2>게임 소개</h2>
+          <p>- 기획중...</p>
+
+          <h2>소통 방식</h2>
+          <p>- 평일 퇴근후/주말 비대면 소통</p>
+
+          <h2>구성원 역할</h2>
+          <p>
+            출시까지 팀 구성은 <strong>3인 체제</strong>로 운영할 예정이며,
+            도메인 · 서버 운영비 · 등록 수수료 등
+            <mark>부수 비용은 모두 개발자들이 부담</mark>합니다.
+            <strong>사업 · 기획 · 법적 검토 · 마케팅</strong> 등 경영 전반에
+            필요한 부분도 개발자들이 책임지고 처리할 계획입니다.
+          </p>
+          <p>
+            디자이너님께서는 게임 아트 전반을 총괄하여 진행해 주시면 됩니다.
+            작업물은 팀에 귀속되지만, 부득이하게 출시 이전에 팀을 떠나셔야 하는
+            상황이 생긴다면, 작업하신 모든 창작물의 저작권은 디자이너님이 그대로
+            가져가셔도 괜찮습니다.
+          </p>
+
+          <h2>수익 분배</h2>
+          <p>
+            팀에 소속되어 있는 동안에는 매출에서
+            <mark>업무상 지출을 제외한 순수익의 20%</mark>를 배분받게 됩니다.
+            <strong>20%가 200원이 아닌 200억이 될 수 있도록</strong> 구성원
+            모두가 최선을 다할 예정입니다.
+          </p>
+        </div>
+
+        <!-- 팀 소개 탭 -->
+        <div
+          class="tab-panel"
+          id="tab-team"
+          role="tabpanel"
+          aria-label="팀 소개"
+        >
+          <h2>팀소개</h2>
+          <p>안녕하세요! 인디게임 개발팀, 플라타너스(임시)입니다.</p>
+          <p>
+            플라타너스는 그리스어 platys(πλατύς) 에서 온 이름으로, 버즘나무과에
+            속하는 큰 가로수입니다. 공해에도 강하고, 빠르게 성장하며, 깊고
+            단단한 뿌리를 내리는 나무죠. 어디에 심어도 금세 커져서, 때로는 도시
+            입장에선 관리가 어려운 골칫거리가 되기도 합니다.
+          </p>
+          <p>
+            저희는 이 플라타너스처럼 어떤 환경 속에서도 빠르게 성장하고, 주변
+            시스템까지 흔들 수 있는 강한 임팩트를 내는 팀이 되고자 합니다.
+          </p>
+
+          <h2>핵심가치</h2>
+          <p>
+            플라타너스가 만들 작품의 핵심 가치는 FIT입니다.
+            <mark
+              >Fresh · Intuitive · Timeless 늘 새롭고, 누구나 직관적으로 즐길 수
+              있으며, 시간이 지나도 다시 꺼내보고 싶은 게임을 만드는 것이 저희의
+              목표</mark
+            >입니다.
+          </p>
+
+          <h2>현재 구성원</h2>
+          <p>- 개발자 2인(경력 4-5년)</p>
+
+          <h2>비고</h2>
+          <p>
+            2025년 11월 11일에 출발한 인디 게임 팀입니다. 아직 출시한 게임도,
+            화려한 레퍼런스도 없지만, 플라타너스에서 FIT한 게임을 같이 만들어
+            수익을 창출해 보고 싶다면 편하게 연락 주세요.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        var tabs = document.querySelectorAll(".tab");
+        var panels = {
+          recruit: document.getElementById("tab-recruit"),
+          team: document.getElementById("tab-team"),
+        };
+
+        tabs.forEach(function (tab) {
+          tab.addEventListener("click", function () {
+            var target = tab.getAttribute("data-tab-target");
+
+            // 탭 활성 상태 변경
+            tabs.forEach(function (t) {
+              t.classList.remove("active");
+              t.setAttribute("aria-selected", "false");
+            });
+            tab.classList.add("active");
+            tab.setAttribute("aria-selected", "true");
+
+            // 패널 표시 전환
+            Object.keys(panels).forEach(function (key) {
+              if (key === target) {
+                panels[key].classList.add("active");
+              } else {
+                panels[key].classList.remove("active");
+              }
+            });
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>
