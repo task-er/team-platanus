@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>매장 인게임 - 3매치 퍼즐</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: stretch;
+        background: #020617;
+        color: #f9fafb;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+      }
+      .wrap {
+        width: 100%;
+        max-width: 520px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      header {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .shop-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+      .shop-main {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      #shopLabel {
+        font-size: 16px;
+        font-weight: 600;
+      }
+      #shopLevel {
+        font-size: 12px;
+        color: #9ca3af;
+      }
+      .gauge-info {
+        font-size: 12px;
+        color: #9ca3af;
+        text-align: right;
+      }
+      .gauge-box {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .gauge-label-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        color: #9ca3af;
+      }
+      .gauge-label-row strong {
+        font-size: 13px;
+        color: #e5e7eb;
+      }
+      .gauge-bar {
+        position: relative;
+        width: 100%;
+        height: 14px;
+        border-radius: 999px;
+        background: #020617;
+        border: 1px solid #111827;
+        overflow: hidden;
+      }
+      .gauge-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #22c55e, #a3e635);
+        transition: width 0.15s ease-out;
+      }
+      #gameContainer {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+      }
+      #gameCanvas {
+        width: 100%;
+        max-width: 480px;
+        height: auto;
+        max-height: 70vh;
+        background: #050814;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+        touch-action: none;
+        display: block;
+      }
+      #errorBox {
+        display: none;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.5);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 4px;
+      }
+      a.back-link {
+        color: #bfdbfe;
+        text-decoration: none;
+      }
+      a.back-link:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="shop-header">
+          <div class="shop-main">
+            <div id="shopLabel">매장 -</div>
+            <div id="shopLevel">Lv.-</div>
+          </div>
+          <div class="gauge-info">
+            <div>영업 게이지</div>
+            <div id="gaugePercentText">0%</div>
+          </div>
+        </div>
+        <div class="gauge-box">
+          <div class="gauge-label-row">
+            <strong>가게 게이지</strong>
+            <span style="font-size: 11px; color: #9ca3af">
+              많이/콤보로 깰수록 더 많이 차요
+            </span>
+          </div>
+          <div class="gauge-bar">
+            <div class="gauge-fill" id="gaugeFill"></div>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <div id="errorBox">
+          <div id="errorMsg">
+            선택한 매장을 찾을 수 없습니다.<br />
+            <strong>merge.html</strong>에서 매장 카드의 "영업하기" 버튼으로
+            들어와 주세요.
+          </div>
+        </div>
+
+        <div id="gameContainer">
+          <canvas id="gameCanvas"></canvas>
+        </div>
+      </main>
+
+      <footer>
+        <a href="merge.html" class="back-link">← 머지 타운으로 돌아가기</a>
+        <span>/ingame.html?shopId=매장ID</span>
+      </footer>
+    </div>
+
+    <script>
+      (function () {
+        const STORAGE_KEY = "merge-town-v1";
+
+        const shopLabelEl = document.getElementById("shopLabel");
+        const shopLevelEl = document.getElementById("shopLevel");
+        const gaugeFillEl = document.getElementById("gaugeFill");
+        const gaugePercentTextEl = document.getElementById("gaugePercentText");
+        const errorBox = document.getElementById("errorBox");
+        const errorMsg = document.getElementById("errorMsg");
+        const gameContainer = document.getElementById("gameContainer");
+
+        let mergeState = null;
+        let currentShop = null;
+        let shopId = null;
+
+        function loadMergeState() {
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (typeof data !== "object" || !data) return null;
+            return data;
+          } catch (e) {
+            console.error("머지 상태 로드 실패", e);
+            return null;
+          }
+        }
+
+        function saveMergeState() {
+          if (!mergeState) return;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(mergeState));
+          } catch (e) {
+            console.error("머지 상태 저장 실패", e);
+          }
+        }
+
+        function setGauge(value) {
+          if (!currentShop) return;
+          const clamped = Math.max(0, Math.min(100, value));
+          currentShop.gauge = clamped;
+          if (gaugeFillEl) gaugeFillEl.style.width = clamped + "%";
+          if (gaugePercentTextEl)
+            gaugePercentTextEl.textContent = Math.round(clamped) + "%";
+          saveMergeState();
+        }
+
+        function addGauge(delta) {
+          if (!currentShop || !delta || delta <= 0) return;
+          const current =
+            typeof currentShop.gauge === "number" ? currentShop.gauge : 0;
+          setGauge(current + delta);
+        }
+
+        function showError(msg) {
+          errorMsg.innerHTML = msg;
+          errorBox.style.display = "block";
+          gameContainer.style.display = "none";
+        }
+
+        function init() {
+          mergeState = loadMergeState();
+          const params = new URLSearchParams(location.search);
+          const s = params.get("shopId");
+          if (!mergeState || !s) {
+            showError(
+              "선택한 매장을 찾을 수 없습니다.<br />머지 화면에서 다시 들어와 주세요."
+            );
+            return;
+          }
+          const id = Number(s);
+          if (Number.isNaN(id) || !mergeState.shops || !mergeState.shops[id]) {
+            showError(
+              "선택한 매장을 찾을 수 없습니다.<br />머지 화면에서 다시 들어와 주세요."
+            );
+            return;
+          }
+
+          shopId = id;
+          currentShop = mergeState.shops[shopId];
+
+          shopLabelEl.textContent = `매장 #${currentShop.id}`;
+          shopLevelEl.textContent = `Lv.${currentShop.level}`;
+          setGauge(currentShop.gauge || 0);
+
+          gameContainer.style.display = "flex";
+          errorBox.style.display = "none";
+
+          initGame(); // 3매치 퍼즐 시작
+        }
+
+        // ===================== 3매치 퍼즐 =====================
+        function initGame() {
+          const canvas = document.getElementById("gameCanvas");
+          const ctx = canvas.getContext("2d");
+
+          const LOGICAL_WIDTH = 360;
+          const LOGICAL_HEIGHT = 540; // 위에 헤더 있으니 살짝 줄임
+
+          canvas.width = LOGICAL_WIDTH;
+          canvas.height = LOGICAL_HEIGHT;
+
+          function getCanvasPos(evt) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+              x: (evt.clientX - rect.left) * scaleX,
+              y: (evt.clientY - rect.top) * scaleY,
+            };
+          }
+
+          const COLS = 7;
+          const ROWS = 8;
+          const BOARD_MARGIN_X = 8;
+          const BOARD_TOP = 24;
+
+          let tileSize = 32;
+          let boardOffsetX = 0;
+          let boardOffsetY = 0;
+
+          const ingredients = [
+            { id: "meat", label: "고기", color: "#e74c3c" },
+            { id: "veg", label: "채소", color: "#27ae60" },
+            { id: "fish", label: "생선", color: "#3498db" },
+            { id: "grain", label: "곡물", color: "#f1c40f" },
+          ];
+          const ING_COUNT = ingredients.length;
+
+          let board = []; // [y][x] = tile or null
+
+          const PHASE = {
+            IDLE: "IDLE",
+            SWAP_ANIM: "SWAP_ANIM",
+            RESOLVE_WAIT: "RESOLVE_WAIT",
+            FALLING: "FALLING",
+          };
+          let phase = PHASE.IDLE;
+
+          let selectedTile = null;
+          let pointerDownInfo = null;
+          let isProcessing = false;
+
+          let swapState = null; // {a,b,invalid,stage:"forward"|"back",pendingMatches}
+          let currentMatches = null;
+          let resolveTimer = 0;
+          let comboCount = 0;
+          let comboDisplayTimer = 0;
+
+          const particles = [];
+
+          function computeBoardGeometry() {
+            const availableWidth = LOGICAL_WIDTH - BOARD_MARGIN_X * 2;
+            const availableHeight = LOGICAL_HEIGHT - BOARD_TOP - 20;
+            tileSize = Math.min(availableWidth / COLS, availableHeight / ROWS);
+            const totalBoardWidth = tileSize * COLS;
+            const totalBoardHeight = tileSize * ROWS;
+            boardOffsetX = (LOGICAL_WIDTH - totalBoardWidth) / 2;
+            boardOffsetY = BOARD_TOP + (availableHeight - totalBoardHeight) / 2;
+          }
+
+          function randomIngredientIndex() {
+            return Math.floor(Math.random() * ING_COUNT);
+          }
+
+          function createTile(type, x, y) {
+            return {
+              type,
+              x,
+              y,
+              drawX: x * tileSize,
+              drawY: y * tileSize,
+              targetX: x * tileSize,
+              targetY: y * tileSize,
+              scale: 1,
+              alpha: 1,
+              clearing: false,
+              scaleAnimating: false,
+              doneBreaking: false,
+              shakeTime: 0,
+            };
+          }
+
+          function createEmptyBoard() {
+            board = [];
+            for (let y = 0; y < ROWS; y++) {
+              const row = [];
+              for (let x = 0; x < COLS; x++) {
+                row.push(null);
+              }
+              board.push(row);
+            }
+          }
+
+          function hasMatchAt(x, y) {
+            const tile = board[y][x];
+            if (!tile) return false;
+            const type = tile.type;
+
+            // horizontal
+            let count = 1;
+            let i = x - 1;
+            while (i >= 0 && board[y][i] && board[y][i].type === type) {
+              count++;
+              i--;
+            }
+            i = x + 1;
+            while (i < COLS && board[y][i] && board[y][i].type === type) {
+              count++;
+              i++;
+            }
+            if (count >= 3) return true;
+
+            // vertical
+            count = 1;
+            let j = y - 1;
+            while (j >= 0 && board[j][x] && board[j][x].type === type) {
+              count++;
+              j--;
+            }
+            j = y + 1;
+            while (j < ROWS && board[j][x] && board[j][x].type === type) {
+              count++;
+              j++;
+            }
+            return count >= 3;
+          }
+
+          function findAllMatches() {
+            const matchesSet = new Set();
+
+            // horizontal
+            for (let y = 0; y < ROWS; y++) {
+              let runStart = 0;
+              while (runStart < COLS) {
+                const tile = board[y][runStart];
+                if (!tile) {
+                  runStart++;
+                  continue;
+                }
+                const type = tile.type;
+                let runEnd = runStart + 1;
+                while (
+                  runEnd < COLS &&
+                  board[y][runEnd] &&
+                  board[y][runEnd].type === type
+                ) {
+                  runEnd++;
+                }
+                const length = runEnd - runStart;
+                if (length >= 3) {
+                  for (let x = runStart; x < runEnd; x++) {
+                    matchesSet.add(`${x},${y}`);
+                  }
+                }
+                runStart = runEnd;
+              }
+            }
+
+            // vertical
+            for (let x = 0; x < COLS; x++) {
+              let runStart = 0;
+              while (runStart < ROWS) {
+                const tile = board[runStart][x];
+                if (!tile) {
+                  runStart++;
+                  continue;
+                }
+                const type = tile.type;
+                let runEnd = runStart + 1;
+                while (
+                  runEnd < ROWS &&
+                  board[runEnd][x] &&
+                  board[runEnd][x].type === type
+                ) {
+                  runEnd++;
+                }
+                const length = runEnd - runStart;
+                if (length >= 3) {
+                  for (let y = runStart; y < runEnd; y++) {
+                    matchesSet.add(`${x},${y}`);
+                  }
+                }
+                runStart = runEnd;
+              }
+            }
+
+            const result = [];
+            for (const key of matchesSet) {
+              const [sx, sy] = key.split(",");
+              result.push({ x: parseInt(sx), y: parseInt(sy) });
+            }
+            return result;
+          }
+
+          function swapTilesGrid(x1, y1, x2, y2) {
+            const t1 = board[y1][x1];
+            const t2 = board[y2][x2];
+            board[y1][x1] = t2;
+            board[y2][x2] = t1;
+            if (t1) {
+              t1.x = x2;
+              t1.y = y2;
+              t1.targetX = t1.x * tileSize;
+              t1.targetY = t1.y * tileSize;
+            }
+            if (t2) {
+              t2.x = x1;
+              t2.y = y1;
+              t2.targetX = t2.x * tileSize;
+              t2.targetY = t2.y * tileSize;
+            }
+          }
+
+          function hasAnyPossibleMove() {
+            for (let y = 0; y < ROWS; y++) {
+              for (let x = 0; x < COLS; x++) {
+                const tile = board[y][x];
+                if (!tile) continue;
+
+                // 오른쪽
+                if (x < COLS - 1) {
+                  const neighbor = board[y][x + 1];
+                  if (neighbor) {
+                    const t1 = tile.type;
+                    const t2 = neighbor.type;
+                    tile.type = t2;
+                    neighbor.type = t1;
+                    const possible = hasMatchAt(x, y) || hasMatchAt(x + 1, y);
+                    tile.type = t1;
+                    neighbor.type = t2;
+                    if (possible) return true;
+                  }
+                }
+
+                // 아래
+                if (y < ROWS - 1) {
+                  const neighbor2 = board[y + 1][x];
+                  if (neighbor2) {
+                    const t1 = tile.type;
+                    const t2 = neighbor2.type;
+                    tile.type = t2;
+                    neighbor2.type = t1;
+                    const possible = hasMatchAt(x, y) || hasMatchAt(x, y + 1);
+                    tile.type = t1;
+                    neighbor2.type = t2;
+                    if (possible) return true;
+                  }
+                }
+              }
+            }
+            return false;
+          }
+
+          function collapseBoardAnimated() {
+            for (let x = 0; x < COLS; x++) {
+              let writeY = ROWS - 1;
+
+              for (let y = ROWS - 1; y >= 0; y--) {
+                const tile = board[y][x];
+                if (tile) {
+                  if (writeY !== y) {
+                    board[writeY][x] = tile;
+                    board[y][x] = null;
+                    tile.y = writeY;
+                    tile.targetY = tile.y * tileSize;
+                  }
+                  writeY--;
+                }
+              }
+
+              for (let y = writeY; y >= 0; y--) {
+                const type = randomIngredientIndex();
+                const t = createTile(type, x, y);
+                t.drawY = (y - 6) * tileSize;
+                t.targetY = y * tileSize;
+                board[y][x] = t;
+              }
+            }
+          }
+
+          function isBoardStable() {
+            const threshold = 0.5;
+            for (let y = 0; y < ROWS; y++) {
+              for (let x = 0; x < COLS; x++) {
+                const t = board[y][x];
+                if (!t) continue;
+                if (
+                  Math.abs(t.drawY - t.targetY) > threshold ||
+                  Math.abs(t.drawX - t.targetX) > threshold
+                ) {
+                  return false;
+                }
+              }
+            }
+            return true;
+          }
+
+          function reshuffleBoardTypesUntilMovable() {
+            let attempts = 0;
+            while (attempts < 50) {
+              const allTiles = [];
+              for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                  const t = board[y][x];
+                  if (t) allTiles.push(t);
+                }
+              }
+
+              for (let i = allTiles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const tmpType = allTiles[i].type;
+                allTiles[i].type = allTiles[j].type;
+                allTiles[j].type = tmpType;
+              }
+
+              let hasInitialMatch = false;
+              for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                  if (hasMatchAt(x, y)) {
+                    hasInitialMatch = true;
+                    break;
+                  }
+                }
+                if (hasInitialMatch) break;
+              }
+
+              if (!hasInitialMatch && hasAnyPossibleMove()) return;
+              attempts++;
+            }
+          }
+
+          // ===== 파티클 =====
+          function spawnParticlesAtTile(tile, count = 6) {
+            const centerX = boardOffsetX + tile.drawX + tileSize / 2;
+            const centerY = boardOffsetY + tile.drawY + tileSize / 2;
+            const baseColor = ingredients[tile.type].color;
+
+            for (let i = 0; i < count; i++) {
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 40 + Math.random() * 80;
+              particles.push({
+                x: centerX,
+                y: centerY,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 0,
+                duration: 0.45 + Math.random() * 0.2,
+                size: 2 + Math.random() * 3,
+                color: baseColor,
+              });
+            }
+          }
+
+          function updateParticles(delta) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+              const p = particles[i];
+              p.life += delta;
+              p.x += p.vx * delta;
+              p.y += p.vy * delta;
+              p.vy += 120 * delta; // gravity
+              if (p.life >= p.duration) {
+                particles.splice(i, 1);
+              }
+            }
+          }
+
+          function drawParticles() {
+            for (const p of particles) {
+              const t = p.life / p.duration;
+              const alpha = 1 - t;
+              ctx.save();
+              ctx.globalAlpha = alpha;
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+              ctx.fillStyle = p.color;
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          // ===== 애니메이션 =====
+          function updateAnimations(delta) {
+            const moveSpeed = 16;
+
+            for (let y = 0; y < ROWS; y++) {
+              for (let x = 0; x < COLS; x++) {
+                const t = board[y][x];
+                if (!t) continue;
+
+                t.drawX += (t.targetX - t.drawX) * delta * moveSpeed;
+                t.drawY += (t.targetY - t.drawY) * delta * moveSpeed;
+
+                if (t.scaleAnimating) {
+                  t.scale -= delta * 4;
+                  t.alpha -= delta * 4;
+                  if (t.scale < 0.1) t.scale = 0.1;
+                  if (t.alpha < 0) t.alpha = 0;
+                  if (t.alpha <= 0.01) {
+                    t.doneBreaking = true;
+                  }
+                }
+
+                if (t.shakeTime > 0) {
+                  t.shakeTime -= delta;
+                  if (t.shakeTime < 0) t.shakeTime = 0;
+                }
+              }
+            }
+
+            updateParticles(delta);
+          }
+
+          function tilesNearTarget(tiles) {
+            const threshold = 0.8;
+            for (const t of tiles) {
+              if (!t) continue;
+              if (
+                Math.abs(t.drawX - t.targetX) > threshold ||
+                Math.abs(t.drawY - t.targetY) > threshold
+              ) {
+                return false;
+              }
+            }
+            return true;
+          }
+
+          // ===== 매치 처리 & 게이지 =====
+          function startResolveWithMatches(matches) {
+            currentMatches = matches;
+            resolveTimer = 0.25;
+            phase = PHASE.RESOLVE_WAIT;
+
+            // 콤보: 연속 폭발 횟수
+            comboCount++;
+            comboDisplayTimer = 0.6;
+
+            // --- 게이지 계산 ---
+            // 기본: 한 칸당 1
+            // 콤보가 붙을수록 (2콤보, 3콤보...) 칸당 +0.5씩 더 줌
+            const tiles = matches.length;
+            const basePerTile = 1;
+            const comboBonusPerTile = 0.5 * (comboCount - 1);
+            const gaugeGain = tiles * (basePerTile + comboBonusPerTile);
+            addGauge(gaugeGain);
+
+            for (const pos of matches) {
+              const t = board[pos.y][pos.x];
+              if (!t) continue;
+              t.clearing = true;
+              t.scaleAnimating = true;
+              t.shakeTime = 0.2;
+              spawnParticlesAtTile(t, 8);
+            }
+          }
+
+          function updateStageLogic(delta) {
+            switch (phase) {
+              case PHASE.IDLE:
+                break;
+              case PHASE.SWAP_ANIM:
+                if (!swapState) {
+                  phase = PHASE.IDLE;
+                  isProcessing = false;
+                  break;
+                }
+                if (tilesNearTarget([swapState.a, swapState.b])) {
+                  if (swapState.stage === "forward") {
+                    if (swapState.invalid) {
+                      // 잘못된 스왑 → 다시 원위치
+                      swapState.a.shakeTime = 0.15;
+                      swapState.b.shakeTime = 0.15;
+
+                      const ax = swapState.a.x;
+                      const ay = swapState.a.y;
+                      const bx = swapState.b.x;
+                      const by = swapState.b.y;
+                      swapTilesGrid(ax, ay, bx, by);
+                      swapState.stage = "back";
+                    } else {
+                      const matches = swapState.pendingMatches;
+                      swapState = null;
+                      startResolveWithMatches(matches);
+                    }
+                  } else if (swapState.stage === "back") {
+                    swapState = null;
+                    phase = PHASE.IDLE;
+                    isProcessing = false;
+                  }
+                }
+                break;
+              case PHASE.RESOLVE_WAIT:
+                resolveTimer -= delta;
+                if (resolveTimer <= 0 && currentMatches) {
+                  for (const pos of currentMatches) {
+                    board[pos.y][pos.x] = null;
+                  }
+                  currentMatches = null;
+                  collapseBoardAnimated();
+                  phase = PHASE.FALLING;
+                }
+                break;
+              case PHASE.FALLING:
+                if (isBoardStable()) {
+                  const matches = findAllMatches();
+                  if (matches.length > 0) {
+                    // 자동 연쇄 콤보
+                    startResolveWithMatches(matches);
+                  } else {
+                    // 콤보 종료
+                    comboCount = 0;
+                    comboDisplayTimer = 0;
+                    if (!hasAnyPossibleMove()) {
+                      reshuffleBoardTypesUntilMovable();
+                    }
+                    phase = PHASE.IDLE;
+                    isProcessing = false;
+                  }
+                }
+                break;
+            }
+
+            if (comboDisplayTimer > 0) {
+              comboDisplayTimer -= delta;
+              if (comboDisplayTimer < 0) comboDisplayTimer = 0;
+            }
+          }
+
+          function attemptSwapAndResolve(x1, y1, x2, y2) {
+            if (isProcessing) return;
+            const t1 = board[y1][x1];
+            const t2 = board[y2][x2];
+            if (!t1 || !t2) return;
+
+            isProcessing = true;
+
+            swapTilesGrid(x1, y1, x2, y2);
+
+            const matches = findAllMatches();
+            const invalid = matches.length === 0;
+
+            t1.drawX = t1.x * tileSize;
+            t1.drawY = t1.y * tileSize;
+            t2.drawX = t2.x * tileSize;
+            t2.drawY = t2.y * tileSize;
+
+            swapState = {
+              a: t1,
+              b: t2,
+              invalid,
+              stage: "forward",
+              pendingMatches: invalid ? null : matches,
+            };
+            phase = PHASE.SWAP_ANIM;
+          }
+
+          function getTileFromPos(px, py) {
+            const x = Math.floor((px - boardOffsetX) / tileSize);
+            const y = Math.floor((py - boardOffsetY) / tileSize);
+            if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return null;
+            return { x, y };
+          }
+
+          // ===== 입력 =====
+          function stagePointerDown(pos) {
+            if (phase !== PHASE.IDLE) return;
+            const tilePos = getTileFromPos(pos.x, pos.y);
+            if (!tilePos) return;
+            pointerDownInfo = {
+              startX: pos.x,
+              startY: pos.y,
+              tileX: tilePos.x,
+              tileY: tilePos.y,
+            };
+            selectedTile = { x: tilePos.x, y: tilePos.y };
+          }
+
+          function stagePointerMove(_pos) {
+            // 필요하면 드래그 시 가이드 추가 가능
+          }
+
+          function stagePointerUp(pos) {
+            if (!pointerDownInfo) {
+              selectedTile = null;
+              return;
+            }
+            if (phase !== PHASE.IDLE) {
+              pointerDownInfo = null;
+              selectedTile = null;
+              return;
+            }
+
+            const dx = pos.x - pointerDownInfo.startX;
+            const dy = pos.y - pointerDownInfo.startY;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+            const minDrag = 10;
+
+            if (absDx < minDrag && absDy < minDrag) {
+              pointerDownInfo = null;
+              selectedTile = null;
+              return;
+            }
+
+            let dirX = 0;
+            let dirY = 0;
+            if (absDx > absDy) dirX = dx > 0 ? 1 : -1;
+            else dirY = dy > 0 ? 1 : -1;
+
+            const x1 = pointerDownInfo.tileX;
+            const y1 = pointerDownInfo.tileY;
+            const x2 = x1 + dirX;
+            const y2 = y1 + dirY;
+
+            pointerDownInfo = null;
+            selectedTile = null;
+
+            if (x2 < 0 || x2 >= COLS || y2 < 0 || y2 >= ROWS) return;
+
+            attemptSwapAndResolve(x1, y1, x2, y2);
+          }
+
+          canvas.addEventListener("pointerdown", (e) => {
+            const pos = getCanvasPos(e);
+            stagePointerDown(pos);
+            e.preventDefault();
+          });
+
+          canvas.addEventListener("pointermove", (e) => {
+            const pos = getCanvasPos(e);
+            stagePointerMove(pos);
+            e.preventDefault();
+          });
+
+          canvas.addEventListener("pointerup", (e) => {
+            const pos = getCanvasPos(e);
+            stagePointerUp(pos);
+            e.preventDefault();
+          });
+
+          canvas.addEventListener("pointercancel", () => {
+            pointerDownInfo = null;
+            selectedTile = null;
+          });
+
+          // ===== 보드 생성 =====
+          function generateInitialBoard() {
+            createEmptyBoard();
+            for (let y = 0; y < ROWS; y++) {
+              for (let x = 0; x < COLS; x++) {
+                let type;
+                let safety = 0;
+                do {
+                  type = randomIngredientIndex();
+                  board[y][x] = createTile(type, x, y);
+                  safety++;
+                } while (hasMatchAt(x, y) && safety < 50);
+              }
+            }
+            let safety = 0;
+            while (!hasAnyPossibleMove() && safety < 30) {
+              for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                  board[y][x].type = randomIngredientIndex();
+                }
+              }
+              safety++;
+            }
+          }
+
+          // ===== 그리기 =====
+          function drawGame() {
+            ctx.fillStyle = "#020617";
+            ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+            computeBoardGeometry();
+
+            // 보드 배경
+            ctx.save();
+            const boardW = tileSize * COLS;
+            const boardH = tileSize * ROWS;
+            const bgX = boardOffsetX;
+            const bgY = boardOffsetY;
+            const bgGrad = ctx.createLinearGradient(
+              bgX,
+              bgY,
+              bgX,
+              bgY + boardH
+            );
+            bgGrad.addColorStop(0, "#020617");
+            bgGrad.addColorStop(1, "#020617");
+            ctx.fillStyle = bgGrad;
+            ctx.beginPath();
+            ctx.roundRect(bgX - 6, bgY - 6, boardW + 12, boardH + 12, 18);
+            ctx.fill();
+            ctx.restore();
+
+            // 타일 그리기
+            for (let y = 0; y < ROWS; y++) {
+              for (let x = 0; x < COLS; x++) {
+                const tile = board[y][x];
+                const cellX = boardOffsetX + x * tileSize;
+                const cellY = boardOffsetY + y * tileSize;
+
+                // 칸 배경
+                ctx.beginPath();
+                ctx.roundRect(
+                  cellX + 2,
+                  cellY + 2,
+                  tileSize - 4,
+                  tileSize - 4,
+                  8
+                );
+                ctx.fillStyle = "#111827";
+                ctx.fill();
+
+                if (!tile) continue;
+
+                let drawX = boardOffsetX + tile.drawX;
+                let drawY = boardOffsetY + tile.drawY;
+
+                let shakeOffsetX = 0;
+                let shakeOffsetY = 0;
+                if (tile.clearing || tile.shakeTime > 0) {
+                  const s = 1 + (tile.clearing ? (1 - tile.scale) * 4 : 1);
+                  shakeOffsetX = (Math.random() - 0.5) * 3 * s;
+                  shakeOffsetY = (Math.random() - 0.5) * 3 * s;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = tile.alpha;
+                ctx.translate(
+                  drawX + tileSize / 2 + shakeOffsetX,
+                  drawY + tileSize / 2 + shakeOffsetY
+                );
+                ctx.scale(tile.scale, tile.scale);
+                ctx.translate(-tileSize / 2, -tileSize / 2);
+
+                ctx.beginPath();
+                ctx.roundRect(4, 4, tileSize - 8, tileSize - 8, 7);
+                ctx.fillStyle = ingredients[tile.type].color;
+                ctx.fill();
+
+                ctx.font = "bold 14px system-ui";
+                ctx.fillStyle = "#111827";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(
+                  ingredients[tile.type].label[0],
+                  tileSize / 2,
+                  tileSize / 2
+                );
+
+                ctx.restore();
+
+                if (
+                  selectedTile &&
+                  selectedTile.x === x &&
+                  selectedTile.y === y &&
+                  phase === PHASE.IDLE
+                ) {
+                  ctx.save();
+                  ctx.strokeStyle = "#e5e7eb";
+                  ctx.lineWidth = 2;
+                  ctx.strokeRect(
+                    cellX + 3,
+                    cellY + 3,
+                    tileSize - 6,
+                    tileSize - 6
+                  );
+                  ctx.restore();
+                }
+              }
+            }
+
+            // 파티클
+            drawParticles();
+
+            // 콤보 텍스트
+            if (comboDisplayTimer > 0 && comboCount > 0) {
+              ctx.save();
+              const alpha = Math.min(1, comboDisplayTimer / 0.2);
+              ctx.globalAlpha = alpha;
+              ctx.font = "bold 20px system-ui";
+              ctx.fillStyle = "#facc15";
+              ctx.textAlign = "right";
+              ctx.textBaseline = "top";
+              ctx.fillText(`${comboCount} 콤보!`, LOGICAL_WIDTH - 12, 8);
+              ctx.restore();
+            }
+          }
+
+          // ===== 루프 =====
+          let lastTime = performance.now();
+          function mainLoop() {
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+
+            updateAnimations(delta);
+            updateStageLogic(delta);
+            drawGame();
+
+            requestAnimationFrame(mainLoop);
+          }
+
+          // 초기화
+          computeBoardGeometry();
+          generateInitialBoard();
+          mainLoop();
+        }
+
+        document.addEventListener("DOMContentLoaded", init);
+      })();
+    </script>
+  </body>
+</html>
