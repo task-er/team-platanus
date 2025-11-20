@@ -55,7 +55,8 @@
       }
 
       .intro-section strong {
-        font-weight: 800;
+        font-weight: 600;
+        color: black;
       }
 
       /* 탭 스타일 */
@@ -113,6 +114,51 @@
         }
       }
     </style>
+
+    <script>
+      (function () {
+        // 1) 페이지 진입 시 비밀번호 확인
+        var password = prompt("비밀번호 4자리를 입력하세요.");
+
+        // 취소하거나, 잘못 입력하면 오픈채팅으로 이동
+        if (password !== "333") {
+          window.location.href = "https://open.kakao.com/o/saodJp1h";
+          return; // 아래 코드 실행 막기
+        }
+
+        // 2) 비밀번호가 맞으면 기존 탭 코드 실행
+        var tabs = document.querySelectorAll(".tab");
+        var panels = {
+          recruit: document.getElementById("tab-recruit"),
+          team: document.getElementById("tab-team"),
+          work: document.getElementById("tab-work"),
+          market: document.getElementById("tab-market"),
+        };
+
+        tabs.forEach(function (tab) {
+          tab.addEventListener("click", function () {
+            var target = tab.getAttribute("data-tab-target"); // 'recruit' | 'team' | 'work' | 'market'
+
+            // 탭 활성 상태 변경
+            tabs.forEach(function (t) {
+              t.classList.remove("active");
+              t.setAttribute("aria-selected", "false");
+            });
+            tab.classList.add("active");
+            tab.setAttribute("aria-selected", "true");
+
+            // 패널 표시 전환
+            Object.keys(panels).forEach(function (key) {
+              if (key === target) {
+                panels[key].classList.add("active");
+              } else {
+                panels[key].classList.remove("active");
+              }
+            });
+          });
+        });
+      })();
+    </script>
   </head>
 
   <body>
@@ -138,6 +184,24 @@
           >
             팀소개
           </button>
+          <button
+            class="tab"
+            data-tab-target="work"
+            type="button"
+            role="tab"
+            aria-selected="false"
+          >
+            작업방식
+          </button>
+          <button
+            class="tab"
+            data-tab-target="market"
+            type="button"
+            role="tab"
+            aria-selected="false"
+          >
+            시장조사
+          </button>
         </div>
 
         <!-- 게임 아트 모집글 탭 -->
@@ -149,65 +213,37 @@
         >
           <h2>모집 포지션</h2>
           <p>
-            - 게임 아트 일러스트(캐릭터,배경,UI)<br />- 1년 이상의 실무 경험
+            - 게임 아트 일러스트(캐릭터,배경,UI)<br />- 이펙트 작업 역량은 우대
+            사항이지만, 필수 요건은 아닙니다!
           </p>
 
-          <h2>작업 기간</h2>
-          <p>- 1차 출시까지 약 3개월 내외</p>
+          <h2>예상 작업 기간</h2>
+          <p>- 출시까지 3개월 ~ 6개월</p>
 
-          <h2>게임 장르</h2>
+          <h2>아트 컨셉 & 분량</h2>
           <p>
-            - 2D 캐주얼 퍼즐형게임<br />- 한붓그리기 형태로 고려중
+            -
             <a
-              href="https://www.youtube.com/watch?v=O89Da3nQoHo"
+              href="https://www.notion.so/2b1a0f19858880809342c9fd3f889d28?source=copy_link"
               onclick="window.open(
-    'https:\/\/www.youtube.com/watch?v=O89Da3nQoHo',
+    'https:\/\/www.notion.so/2b1a0f19858880809342c9fd3f889d28?source=copy_link',
     'example',
     'width=800,height=600,noopener,noreferrer'
   ); return false;"
             >
-              [예시1]</a
-            ><a
-              href="https://www.youtube.com/watch?v=csL0bY12RQw&t=14s"
-              onclick="window.open(
-    'https:\/\/www.youtube.com/watch?v=csL0bY12RQw&t=14s',
-    'example',
-    'width=800,height=600,noopener,noreferrer'
-  ); return false;"
-              >[예시2]</a
+              자세히 보기</a
             >
           </p>
-
-          <h2>소통 방식</h2>
-          <p>- 평일 퇴근후/주말 비대면 소통</p>
-
-          <h2>구성원 역할</h2>
+          <h2>저작권</h2>
           <p>
-            출시까지 팀 구성은 <strong>3인 체제</strong>로 운영할 예정이며, 단순
-            완성 보다는 수익 창출을 목표로 하고 있습니다. 도메인 · 서버 운영비 ·
-            등록 수수료 등 <mark>부수적인 비용은 개발자들이 부담</mark>합니다.
-            <strong>사업 · 기획 · 법적 검토 · 마케팅</strong> 등 경영 전반에
-            필요한 부분도 개발자들이 책임지고 처리할 계획입니다.
-          </p>
-          <p>
-            디자이너님께서는 게임 아트 전반을 총괄하여 진행해 주시면 됩니다.
-            작업물은 팀에 귀속됩니다.
+            작업물은 팀에 귀속되나, 포트폴리오 등의 PR목적으로 사용하셔도
+            괜찮습니다.
           </p>
 
-          <h2>수익 분배</h2>
+          <h2>수익분배</h2>
           <p>
-            팀에 소속되어 있는 동안에는 매출에서
-            <mark>업무상 지출을 제외한 수익의 20%</mark>를 배분받게 됩니다.
-            <strong>20%가 200원이 아닌 200억이 될 수 있도록</strong> 구성원
-            모두가 최선을 다할 예정입니다.
-          </p>
-
-          <br />
-          <hr />
-          <br />
-
-          <p>
-            글로벌 출시와 함께 APK/IPA 빌드할 예정이며, 피해 보시는 일이 없도록
+            고정급여는 없으나, 매출에서
+            <mark>업무상 지출을 제외한 순이익의 20%</mark>를 배분받게 됩니다.
             간이계약서를 작성하고 진행할 예정입니다.
           </p>
         </div>
@@ -244,13 +280,225 @@
 
           <h2>현재 구성원</h2>
           <p>- 클라이언트 개발자<br />- 서버 개발자</p>
+        </div>
 
-          <h2>비고</h2>
+        <div
+          class="tab-panel"
+          id="tab-work"
+          role="tabpanel"
+          aria-label="작업방식"
+        >
+          <h2>비용부담</h2>
           <p>
-            2025년 11월 11일에 출발한 인디 게임 팀입니다. 아직 출시한 게임도,
-            화려한 레퍼런스도 없지만, 플라타너스에서 FIT한 게임을 같이 만들어
-            수익을 창출해 보고 싶다면 편하게 연락 주세요.
+            디자이너 개인 툴을 제외하고, 출시에 필요한 모든 비용은 저희
+            개발자들이 부담합니다. 항목 예시는 하기와 같습니다.<br />-
+            플레이스토어 등록수수료<br />- 앱스토어 등록수수료<br />- 웹사이트
+            도메인 구매비<br />- 클라우드 서버 운영비<br />- 사운드 에셋
+            구매비<br />- 이펙트 에셋 구매비(필요에 따라)<br />- 법률
+            자문료(필요에 따라)
           </p>
+
+          <h2>소통방식</h2>
+          <p>
+            - 평일 퇴근후/주말 비대면 소통<br />- 카카오톡(메인, 실시간 소통)<br />-
+            노션(서브, 문서)
+          </p>
+
+          <h2>참여시간대</h2>
+          <p>
+            - 평일 저녁 / 주말 등을 활용하여 본업시간 외 자유롭게 활용하시면
+            좋습니다!
+          </p>
+        </div>
+
+        <div
+          class="tab-panel"
+          id="tab-market"
+          role="tabpanel"
+          aria-label="시장조사"
+        >
+          <p>
+            이 프로젝트는
+            <strong
+              >3매치 퍼즐로 탕후루를 만들면서 마법의과일 · 수익을 얻고, 그
+              수익으로 매장을 키우는 장사/타이쿤 메타</strong
+            >를 결합한 하이브리드 캐주얼 게임입니다. 퍼즐 플레이는 짧고 반복
+            가능한 코어 루프를 담당하고, 매장 확장 · 마법의과일 수집은 장기
+            동기를 만들어주는 구조입니다.
+          </p>
+
+          <p>
+            요약하면 <strong>“3매치 코어 + 장사 타이쿤 메타”</strong>를 통해,
+            퍼즐 장르의 대규모 유저 풀과 경영/성장 게임을 선호하는 유저 니즈를
+            동시에 겨냥합니다.
+          </p>
+
+          <h2>시장 규모 &amp; 성장성</h2>
+          <ul>
+            <li>
+              <strong>모바일 게임 전체</strong> – 2024년 전 세계 모바일 게임
+              매출은 약 <strong>920억 달러</strong> 수준으로, 전체 게임 매출의
+              약 49%를 차지합니다(플랫폼별 매출 기준).
+            </li>
+            <li>
+              <strong>퍼즐 장르(3매치 포함)</strong> – Sensor Tower 기반 집계에
+              따르면 2024년 전 세계 퍼즐 장르 인앱결제(IAP) 매출은 약
+              <strong>122억 달러</strong>로 모바일 게임 장르 중
+              <strong>3위</strong>, 전체 모바일 게임 IAP의 약
+              <strong>15% 내외</strong>를 차지합니다.
+            </li>
+            <li>
+              <strong>시뮬레이션/타이쿤 장르</strong> – 같은 데이터에서
+              시뮬레이션 장르 IAP 매출은 약 <strong>61억 달러</strong>로 장르별
+              <strong>5위</strong>, 전체 모바일 게임 IAP의 약
+              <strong>7%대</strong> 규모입니다. 이 안에
+              <em>“Simulation | Tycoon / Crafting”</em> 서브장르가 포함되며,
+              서브장르별 IAP 순위 기준 상위권(<strong>Top 10</strong>)에
+              해당합니다.
+            </li>
+            <li>
+              <strong>3매치 서브장르(매치-3)</strong> – AppMagic가 집계한 2025년
+              상반기 기준으로 퍼즐 장르 IAP 매출은 약
+              <strong>46억 달러</strong>이며, 그 중
+              <strong>매치-3 서브장르가 약 27억 달러</strong>(+7% YoY)를
+              차지합니다. Royal Match, Candy Crush Saga 두 타이틀이 해당
+              서브장르 매출의 절반 이상을 차지하고 있습니다.
+            </li>
+            <li>
+              <strong>비즈니스 시뮬레이션(광의의 경영/시뮬레이션 시장)</strong>
+              – PC·콘솔·모바일을 모두 포함한 글로벌 비즈니스 시뮬레이션 게임
+              시장은 2023년 <strong>48억 달러</strong>에서 2033년
+              <strong>152억 달러</strong>까지 성장하는 것으로 전망되며,
+              <strong>CAGR 12.8%</strong> 수준의 고성장이 예상됩니다. 이 중
+              모바일 플랫폼이 가장 큰 비중(2023년 약 45%)을 차지합니다.
+            </li>
+            <li>
+              <strong>요약</strong> – 퍼즐(약 122억 달러)과 시뮬레이션(약 61억
+              달러)을 합치면 연간 인앱 매출만 약
+              <strong>183억 달러(한화, 약 30조원)</strong> 수준으로, 전체 모바일
+              게임 IAP의 <strong>약 20% 규모</strong>입니다. 본 프로젝트는 이 두
+              코어 장르의 교차점(3매치 코어 + 경영/장사 메타)에 포지셔닝됩니다.
+            </li>
+          </ul>
+
+          <h2>타겟 유저</h2>
+          <ul>
+            <li>
+              <strong>짧은 세션의 퍼즐 플레이</strong>를 선호하면서도, “내
+              매장이 성장하는 것”에서 동기부여를 받는 캐주얼 모바일 게이머
+            </li>
+            <li>
+              하드코어 경영 시뮬레이션보다는
+              <strong>직관적인 UX와 가벼운 난이도</strong>를 선호하는 유저
+            </li>
+            <li>
+              시간을 쪼개서 자주 접속해
+              <strong>“한 판 퍼즐 + 가게 정리”</strong> 루프를 반복하는
+              하이브리드 캐주얼 성향의 유저
+            </li>
+            <li>
+              대중교통 이용 또는 쉬는시간에 킬링타임 목적으로 가볍게 플레이할 수
+              있는 게임을 선호하는 유저
+            </li>
+          </ul>
+
+          <h2>레퍼런스 / 포지셔닝</h2>
+          <ul>
+            <li>
+              <strong>코어 루프 레퍼런스</strong> – Royal Match, Candy Crush
+              Saga 등 전통적인 매치-3 퍼즐의 직관적인
+              <strong>스와이프 매치 코어</strong>를 기본으로 삼습니다.
+            </li>
+            <li>
+              <strong>메타 레퍼런스</strong> – Homescapes 계열의 “매치-3 +
+              꾸미기/스토리” 구조에서 “집/마을” 대신
+              <strong>실제 장사 흐름(식재료 → 조리 → 판매 → 단골 관리)</strong
+              >을 메타로 사용합니다.
+            </li>
+            <li>
+              <strong>타이쿤 레퍼런스</strong> – Idle Tycoon·카이로소프트식 경영
+              게임의 <strong>업그레이드/확장/수치 성장</strong> 감각을 가져오되,
+              Idle Tycoon 서브장르가 최근
+              <strong>매출 –19%, 다운로드 –20%</strong> 수준의 조정 구간이라는
+              점을 감안해
+              <strong
+                >방치형이 아니라 퍼즐 플레이 비중을 유지하는 하이브리드
+                구조</strong
+              >를 지향합니다.
+            </li>
+            <li>
+              <strong>포지셔닝 한 줄 정리</strong> –
+              <strong>“3매치 퍼즐 × K-자영업 타이쿤”</strong>
+              : 글로벌 캐주얼 퍼즐 유저 풀을 기반으로 하되, 한국/아시아 유저에게
+              익숙한 장사 서사와 디테일(메뉴·손님·리뷰·단골 등)로 차별화합니다.
+            </li>
+          </ul>
+
+          <h2>출처(링크)</h2>
+          <ul class="market-sources">
+            <li>
+              <a
+                href="https://www.blog.udonis.co/mobile-marketing/mobile-games/mobile-gaming-statistics"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Udonis – 200+ Mobile Gaming Market Statistics (2025)
+              </a>
+              : Newzoo &amp; Sensor Tower 데이터를 기반으로 2024년 모바일 게임
+              매출(약 920억 달러)과 장르별 IAP 매출(퍼즐 122억 달러, 시뮬레이션
+              61억 달러) 및 서브장르 순위를 정리한 레포트.
+            </li>
+            <li>
+              <a
+                href="https://sensortower.com/state-of-mobile-gaming-2024"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Sensor Tower – State of Mobile Gaming 2024
+              </a>
+              : 글로벌 모바일 게임 인앱 매출·다운로드 동향, 퍼즐/시뮬레이션을
+              포함한 주요 장르의 성장 추이와 상위 매출 게임(예: Royal Match,
+              Candy Crush Saga) 분석.
+            </li>
+            <li>
+              <a
+                href="https://datahorizzonresearch.com/business-simulation-games-market-46779"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                DataHorizzon Research – Business Simulation Games Market
+                (2025–2033)
+              </a>
+              : 비즈니스 시뮬레이션 게임 시장 규모 (2023년 48억 달러 → 2033년
+              152억 달러, CAGR 12.8%)와 플랫폼별(모바일/PC/콘솔) 비중 및 성장
+              전망.
+            </li>
+            <li>
+              <a
+                href="https://gamerbraves.com/casual-games-h1-2025-puzzle-casino-and-simulation-dominate-80-of-revenue/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                GamerBraves – Casual Games H1 2025: Puzzle, Casino, and
+                Simulation Dominate 80% of Revenue
+              </a>
+              : AppMagic 데이터를 인용해 2025년 상반기 캐주얼 게임 매출(120억
+              달러) 중 퍼즐·카지노·시뮬레이션 3개 장르가 80%를 차지하고, 퍼즐
+              중에서도 Match-3 서브장르가 약 27억 달러를 기록한 것으로 정리.
+            </li>
+            <li>
+              <a
+                href="https://appmagic.rocks/research"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                AppMagic – Casual / Idle Tycoon 장르 리서치
+              </a>
+              : 캐주얼·Idle Tycoon 장르별 매출·다운로드 추이, Idle Tycoon 매출
+              –19%, 다운로드 –20% 등 최근 과열 이후 조정 국면과 서브장르 경쟁
+              강도 분석.
+            </li>
+          </ul>
         </div>
       </section>
     </main>
@@ -261,11 +509,13 @@
         var panels = {
           recruit: document.getElementById("tab-recruit"),
           team: document.getElementById("tab-team"),
+          work: document.getElementById("tab-work"),
+          market: document.getElementById("tab-market"),
         };
 
         tabs.forEach(function (tab) {
           tab.addEventListener("click", function () {
-            var target = tab.getAttribute("data-tab-target");
+            var target = tab.getAttribute("data-tab-target"); // 'recruit' | 'team' | 'work' | 'market'
 
             // 탭 활성 상태 변경
             tabs.forEach(function (t) {

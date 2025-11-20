@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>탕후루 매장 게임 (Single File)</title>
+    <style>
+      :root {
+        --bg: #0f1724;
+        --card: #0b1220;
+        --accent: #f9a825;
+        --muted: #94a3b8;
+        --glass: rgba(255, 255, 255, 0.03);
+        --success: #22c55e;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: Inter, "Noto Sans KR", system-ui, -apple-system,
+          "Apple SD Gothic Neo", "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      }
+      body {
+        background: linear-gradient(180deg, #071023 0%, #071a2b 100%);
+        color: #e6eef8;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 18px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+      .title {
+        font-size: 20px;
+        font-weight: 700;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .goldbar {
+        background: var(--glass);
+        padding: 8px 12px;
+        border-radius: 10px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+      }
+      .gold-amount {
+        font-weight: 700;
+        color: var(--accent);
+        min-width: 120px;
+        text-align: right;
+      }
+      .main {
+        display: flex;
+        gap: 12px;
+        flex: 1;
+        min-height: 0;
+      } /* min-height:0 to allow scroll child grow */
+      .lobby {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.02),
+          rgba(255, 255, 255, 0.01)
+        );
+        border-radius: 12px;
+        padding: 12px;
+        flex: 1;
+        overflow: auto;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        width: 100%;
+      }
+      .shop {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.02),
+          rgba(255, 255, 255, 0.01)
+        );
+        padding: 12px;
+        border-radius: 12px;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        border: 1px solid rgba(255, 255, 255, 0.03);
+      }
+      .shop .head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+      .shop .type {
+        font-weight: 700;
+      }
+      .shop .tier {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .progress-wrap {
+        margin-top: 8px;
+      }
+      .progress-bg {
+        height: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--accent), #ffd54a);
+        transition: width 300ms ease;
+      }
+      .progress-text {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--muted);
+        align-items: center;
+      }
+      .btn {
+        background: #102133;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.03);
+        cursor: pointer;
+        color: #e6eef8;
+        font-weight: 600;
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: center;
+        padding: 10px;
+        background: transparent;
+        border-radius: 10px;
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 6px;
+      }
+      .fixed-bar {
+        position: sticky;
+        bottom: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(0, 0, 0, 0),
+          rgba(0, 0, 0, 0.45)
+        );
+        padding-top: 10px;
+        display: flex;
+        justify-content: center;
+      }
+      .bottom-controls {
+        display: flex;
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 12px;
+        border-radius: 12px;
+        align-items: center;
+        box-shadow: 0 -8px 24px rgba(2, 6, 23, 0.6);
+      }
+      .claim-btn {
+        background: linear-gradient(90deg, #14b8a6, #06b6d4);
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: none;
+        color: #031025;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .small-muted {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .shop-id {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.18);
+      }
+      .empty {
+        opacity: 0.6;
+        padding: 18px;
+        text-align: center;
+        color: var(--muted);
+      }
+      /* responsive tweaks */
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 480px) {
+        .grid {
+          grid-template-columns: repeat(1, 1fr);
+        }
+        .title {
+          font-size: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="title">🍡 탕후루 상점 로비</div>
+      <div class="goldbar">
+        <div class="small-muted">보유 골드</div>
+        <div id="gold" class="gold-amount">0</div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="lobby">
+        <div class="small-muted" style="margin-bottom: 8px">
+          매장 목록 (4열 그리드, 스크롤 가능)
+        </div>
+        <div id="grid" class="grid">
+          <!-- shops rendered here -->
+        </div>
+        <div id="emptyHint" class="empty" style="display: none">
+          매장이 없습니다. '매장 추가' 버튼을 눌러 시작하세요.
+        </div>
+      </section>
+    </main>
+
+    <div class="fixed-bar">
+      <div class="bottom-controls">
+        <button id="addShopBtn" class="btn">➕ 매장 추가</button>
+        <button id="sellTestBtn" class="btn">탕후루팔기(테스트)</button>
+        <button id="claimAllBtn" class="btn">모두 수령</button>
+        <div
+          style="
+            width: 1px;
+            background: rgba(255, 255, 255, 0.03);
+            height: 28px;
+            margin: 0 6px;
+          "
+        ></div>
+        <div class="small-muted">매장수: <span id="shopCount">0</span></div>
+      </div>
+    </div>
+
+    <script>
+      /*
+  탕후루 매장 게임 (single-file)
+  - 4열 그리드, 스크롤 가능
+  - 상단에 보유 골드
+  - 매장별 판매량 (0/10), 판매량 채우면 '수익금수령' 버튼으로 변함 (버튼에 획득 골드 표기)
+  - '탕후루팔기(테스트)' : 골드 +1000, 모든 매장의 판매량 +8 (max 10)
+  - '모두 수령' : 모든 매장에서 수익금 수령
+  - '매장 추가' : 판자촌 추가
+  - 같은 매장 종류가 두 개 있으면 자동 머지(단, 수익금수령 활성 매장은 제외)
+  - 머지 시 판매량은 더 높은 판매량을 따름
+  - 머지 단계: 판자촌 -> 컨테이너 -> 미니매장 -> 중형매장 -> 대형매장
+*/
+
+      // 샵 타입 정의 (순서=업그레이드 순서)
+      const TIERS = [
+        { key: "판자촌", revenue: 100 },
+        { key: "컨테이너", revenue: 300 },
+        { key: "미니매장", revenue: 800 },
+        { key: "중형매장", revenue: 2000 },
+        { key: "대형매장", revenue: 5000 },
+      ];
+
+      const CAPACITY = 10; // 판매량 만땅 기준
+      let gold = 0;
+      let shopCounter = 0;
+      let shops = []; // { id, tierIndex, sales (0..CAPACITY) }
+
+      const gridEl = document.getElementById("grid");
+      const goldEl = document.getElementById("gold");
+      const shopCountEl = document.getElementById("shopCount");
+      const emptyHint = document.getElementById("emptyHint");
+
+      function formatNum(n) {
+        return n.toLocaleString("ko-KR");
+      }
+
+      function updateUI() {
+        goldEl.textContent = formatNum(gold);
+        shopCountEl.textContent = shops.length;
+        renderShops();
+      }
+
+      function createShop(tierIndex = 0, sales = 0) {
+        return {
+          id: `s_${Date.now()}_${++shopCounter}`,
+          tierIndex,
+          sales: Math.max(0, Math.min(CAPACITY, Math.floor(sales))),
+        };
+      }
+
+      function addShop(tierIndex = 0, sales = 0) {
+        shops.push(createShop(tierIndex, sales));
+        tryAutoMergeAll();
+        updateUI();
+      }
+
+      function renderShops() {
+        gridEl.innerHTML = "";
+        if (shops.length === 0) {
+          emptyHint.style.display = "block";
+          return;
+        } else {
+          emptyHint.style.display = "none";
+        }
+        // show shops in order
+        shops.forEach((shop) => {
+          const tier = TIERS[shop.tierIndex];
+          const card = document.createElement("div");
+          card.className = "shop";
+          // head
+          const head = document.createElement("div");
+          head.className = "head";
+          head.innerHTML = `<div>
+                        <div class="type">${tier.key}</div>
+                        <div class="tier small-muted">레벨 ${
+                          shop.tierIndex + 1
+                        }</div>
+                      </div>
+                      <div style="text-align:right">
+                        <div class="shop-id">${shop.id}</div>
+                        <div class="small-muted" style="margin-top:6px">수익: <strong>${formatNum(
+                          tier.revenue
+                        )}</strong></div>
+                      </div>`;
+          card.appendChild(head);
+
+          // progress or claim button
+          const wrap = document.createElement("div");
+          wrap.className = "progress-wrap";
+
+          if (shop.sales >= CAPACITY) {
+            // claim button
+            const claimBtn = document.createElement("button");
+            claimBtn.className = "claim-btn";
+            claimBtn.textContent = `수익금 수령 +${formatNum(tier.revenue)}`;
+            claimBtn.onclick = () => {
+              claimShop(shop.id);
+            };
+            wrap.appendChild(claimBtn);
+          } else {
+            // progress bar + text
+            const progressBg = document.createElement("div");
+            progressBg.className = "progress-bg";
+            const progressBar = document.createElement("div");
+            progressBar.className = "progress-bar";
+            progressBar.style.width = `${(shop.sales / CAPACITY) * 100}%`;
+            progressBg.appendChild(progressBar);
+            wrap.appendChild(progressBg);
+
+            const ptext = document.createElement("div");
+            ptext.className = "progress-text";
+            ptext.innerHTML = `<div>${shop.sales}/${CAPACITY}</div>
+                         <div><button class="btn" onclick="incrementShopSales('${shop.id}',1)">+1</button></div>`;
+            wrap.appendChild(ptext);
+          }
+
+          // bottom: small controls (for demo/testing)
+          const bottom = document.createElement("div");
+          bottom.style.display = "flex";
+          bottom.style.justifyContent = "space-between";
+          bottom.style.marginTop = "10px";
+          bottom.innerHTML = `<div class="small-muted">타입 수익: ${formatNum(
+            tier.revenue
+          )}</div>
+                        <div style="display:flex;gap:6px">
+                          <button class="btn" onclick="forceMergeSingle('${
+                            shop.id
+                          }')">머지 가능 확인</button>
+                          <button class="btn" onclick="removeShop('${
+                            shop.id
+                          }')">삭제</button>
+                        </div>`;
+          card.appendChild(wrap);
+          card.appendChild(bottom);
+
+          gridEl.appendChild(card);
+        });
+      }
+
+      // Expose some functions to window for inline onclick
+      window.incrementShopSales = function (shopId, n) {
+        const s = shops.find((x) => x.id === shopId);
+        if (!s) return;
+        s.sales = Math.min(CAPACITY, s.sales + n);
+        updateUI();
+      };
+
+      window.forceMergeSingle = function (shopId) {
+        // For debugging: try merging starting from shop with id
+        tryAutoMergeAll();
+        updateUI();
+      };
+
+      window.removeShop = function (shopId) {
+        shops = shops.filter((s) => s.id !== shopId);
+        updateUI();
+      };
+
+      function claimShop(shopId) {
+        const idx = shops.findIndex((s) => s.id === shopId);
+        if (idx === -1) return;
+        const shop = shops[idx];
+        if (shop.sales < CAPACITY) return;
+        const tier = TIERS[shop.tierIndex];
+        gold += tier.revenue;
+        shop.sales = 0;
+        updateUI();
+      }
+
+      // all-claim
+      function claimAll() {
+        let claimed = 0;
+        shops.forEach((s) => {
+          if (s.sales >= CAPACITY) {
+            gold += TIERS[s.tierIndex].revenue;
+            s.sales = 0;
+            claimed++;
+          }
+        });
+        updateUI();
+        return claimed;
+      }
+
+      // 탕후루팔기(테스트): +1000 gold, 모든 매장 판매량 +8
+      function sellTest() {
+        gold += 1000;
+        shops.forEach((s) => {
+          if (s.sales < CAPACITY) {
+            s.sales = Math.min(CAPACITY, s.sales + 8);
+          }
+        });
+        tryAutoMergeAll();
+        updateUI();
+      }
+
+      // Merge logic:
+      // - Find any two shops with the same tierIndex
+      // - Exclude shops that are currently "claimable" (sales >= CAPACITY)
+      // - Merge them pairwise into one shop with tierIndex+1, sales = max(sales of the pair)
+      // - If tierIndex is already top (largest), do nothing
+      // - Continue until no more merges possible
+      function tryAutoMergeAll() {
+        let mergedOnce = false;
+        let loop = 0;
+        do {
+          mergedOnce = false;
+          loop++;
+          if (loop > 100) break; // safety
+          // group shops by tierIndex, excluding claimable
+          const groups = {};
+          shops.forEach((s) => {
+            if (s.sales >= CAPACITY) return; // 제외
+            groups[s.tierIndex] = groups[s.tierIndex] || [];
+            groups[s.tierIndex].push(s);
+          });
+          // find any group with length >= 2 and tierIndex < max
+          let did = false;
+          for (const tierStr in groups) {
+            const arr = groups[tierStr];
+            const tierIndex = parseInt(tierStr, 10);
+            if (arr.length >= 2 && tierIndex < TIERS.length - 1) {
+              // pick two earliest (by array order), remove them and insert merged
+              const a = arr[0];
+              const b = arr[1];
+              // find real indices in shops array
+              const ia = shops.findIndex((x) => x.id === a.id);
+              const ib = shops.findIndex((x) => x.id === b.id);
+              if (ia === -1 || ib === -1) continue;
+              // compute new sales = max
+              const newSales = Math.max(shops[ia].sales, shops[ib].sales);
+              // remove the two (ensure remove higher index first)
+              const removeIdx = [ia, ib].sort((x, y) => y - x);
+              removeIdx.forEach((i) => shops.splice(i, 1));
+              // add new merged shop at end (or we can insert at smaller index)
+              const mergedShop = createShop(tierIndex + 1, newSales);
+              shops.push(mergedShop);
+              mergedOnce = true;
+              did = true;
+              break; // restart grouping after a merge to maintain deterministic pairing
+            }
+          }
+          if (!did) break;
+        } while (true);
+        return mergedOnce;
+      }
+
+      // Initialize with one 판자촌
+      function init() {
+        gold = 0;
+        shops = [];
+        addShop(0, 0); // 판자촌 하나
+        updateUI();
+      }
+
+      // UI event bindings
+      document.getElementById("addShopBtn").addEventListener("click", () => {
+        addShop(0, 0); // add 판자촌
+        updateUI();
+      });
+      document.getElementById("sellTestBtn").addEventListener("click", () => {
+        sellTest();
+      });
+      document.getElementById("claimAllBtn").addEventListener("click", () => {
+        const claimed = claimAll();
+        // optional small feedback
+        if (claimed === 0) {
+          alert("수령 가능한 매장이 없습니다.");
+        } else {
+          // no alert needed; UI updates automatically
+        }
+      });
+
+      // helper: after any manual change, try merges and update
+      window.tryAutoMergeAll = tryAutoMergeAll;
+
+      // start
+      init();
+
+      // Small keyboard shortcuts for testing (optional)
+      // A: add shop, S: sellTest, C: claimAll
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "a" || e.key === "A") {
+          addShop(0, 0);
+        }
+        if (e.key === "s" || e.key === "S") {
+          sellTest();
+        }
+        if (e.key === "c" || e.key === "C") {
+          claimAll();
+        }
+      });
+    </script>
+  </body>
+</html>
