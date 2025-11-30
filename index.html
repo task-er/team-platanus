@@ -10,6 +10,10 @@
     <!-- 파비콘 -->
     <link rel="icon" type="image/png" href="/slime.png" />
 
+    <!-- 이미지 프리로드 -->
+    <link rel="preload" as="image" href="/xmas_slime.png" />
+    <link rel="preload" as="image" href="/slime.png" />
+
     <!-- Science Gothic 폰트 -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,14 +25,12 @@
     <style>
       * {
         box-sizing: border-box;
-        /* 전체 요소 선택/드래그 방지 */
         -webkit-user-select: none;
         -moz-user-select: none;
         -ms-user-select: none;
         user-select: none;
       }
 
-      /* 이미지 드래그 방지 */
       img {
         -webkit-user-drag: none;
         user-drag: none;
@@ -66,15 +68,109 @@
         display: inline-block;
       }
 
+      .logo .letter-e {
+        position: relative;
+      }
+
+      /* 슬라임 기본 상태 */
       .logo .letter-e .slime {
         position: absolute;
         bottom: 100%;
         left: 50%;
-        /* X는 가운데 정렬, Y를 크게 해서 E 위에 '안착' */
-        transform: translateX(-50%) translateY(52px);
+        transform: translateX(-50%) translateY(52px) scale(1);
         width: 60px;
         height: auto;
+        cursor: pointer;
+        filter: drop-shadow(0 0 1px rgba(0, 130, 255, 0.25));
+        transition: transform 0.35s cubic-bezier(0.22, 1.4, 0.36, 1),
+          filter 0.25s ease-out;
+      }
+
+      /* 호버 시 살짝 커짐 */
+      .logo .letter-e .slime:hover {
+        transform: translateX(-50%) translateY(52px) scale(1.08);
+        filter: drop-shadow(0 0 4px rgba(0, 130, 255, 0.6));
+      }
+
+      /* 누르고 있는 동안(press): 살짝 눌린 느낌 */
+      .logo .letter-e .slime.is-pressed {
+        transform: translateX(-50%) translateY(52px) scale(0.94);
+        filter: drop-shadow(0 0 2px rgba(0, 130, 255, 0.9));
+      }
+
+      /* 터질 때 애니메이션 */
+      @keyframes slime-pop {
+        0% {
+          transform: translateX(-50%) translateY(52px) scale(1);
+          opacity: 1;
+        }
+        60% {
+          transform: translateX(-50%) translateY(52px) scale(1.2);
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(-50%) translateY(52px) scale(0);
+          opacity: 0;
+        }
+      }
+
+      .logo .letter-e .slime.is-exploding {
+        animation: slime-pop 0.45s cubic-bezier(0.36, 0, 0.66, 1) forwards;
+        filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.9));
         pointer-events: none;
+      }
+
+      /* 말풍선 */
+      .slime-bubble {
+        position: absolute;
+        bottom: 115%;
+        left: 50%;
+        transform: translateX(-50%) translateY(4px) scale(0.95);
+
+        background: rgba(8, 10, 22, 0.96);
+        color: #f5faff;
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-size: 11px;
+        line-height: 1.4;
+        white-space: nowrap;
+        border: 1px solid #43d5e5;
+        box-shadow: 0 0 0 1px rgba(67, 213, 229, 0.18),
+          0 8px 18px rgba(0, 0, 0, 0.65);
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.7);
+        letter-spacing: 0.02em;
+
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease-out,
+          transform 0.25s cubic-bezier(0.22, 1.4, 0.36, 1);
+      }
+
+      .slime-bubble::before {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 8px 7px 0 7px;
+        border-style: solid;
+        border-color: #43d5e5 transparent transparent transparent;
+      }
+
+      .slime-bubble::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%) translateY(-1px);
+        border-width: 7px 6px 0 6px;
+        border-style: solid;
+        border-color: rgba(8, 10, 22, 0.96) transparent transparent transparent;
+      }
+
+      .slime-bubble.visible {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
       }
 
       .help {
@@ -94,7 +190,6 @@
         opacity: 1;
       }
 
-      /* 태블릿 이하 */
       @media (max-width: 768px) {
         .logo {
           font-size: 64px;
@@ -103,7 +198,25 @@
 
         .logo .letter-e .slime {
           width: 32px;
-          transform: translateX(-50%) translateY(32px);
+          transform: translateX(-50%) translateY(32px) scale(1);
+        }
+
+        .logo .letter-e .slime:hover {
+          transform: translateX(-50%) translateY(32px) scale(1.08);
+        }
+
+        .logo .letter-e .slime.is-pressed {
+          transform: translateX(-50%) translateY(32px) scale(0.94);
+        }
+
+        .logo .letter-e .slime.is-exploding {
+          animation: slime-pop 0.45s cubic-bezier(0.36, 0, 0.66, 1) forwards;
+        }
+
+        .slime-bubble {
+          bottom: 110%;
+          font-size: 10px;
+          padding: 6px 10px;
         }
 
         .help {
@@ -113,7 +226,6 @@
         }
       }
 
-      /* 작은 모바일 */
       @media (max-width: 480px) {
         .logo {
           font-size: 42px;
@@ -122,7 +234,24 @@
 
         .logo .letter-e .slime {
           width: 26px;
-          transform: translateX(-50%) translateY(21px);
+          transform: translateX(-50%) translateY(21px) scale(1);
+        }
+
+        .logo .letter-e .slime:hover {
+          transform: translateX(-50%) translateY(21px) scale(1.08);
+        }
+
+        .logo .letter-e .slime.is-pressed {
+          transform: translateX(-50%) translateY(21px) scale(0.94);
+        }
+
+        .logo .letter-e .slime.is-exploding {
+          animation: slime-pop 0.45s cubic-bezier(0.36, 0, 0.66, 1) forwards;
+        }
+
+        .slime-bubble {
+          bottom: 108%;
+          font-size: 10px;
         }
 
         .help {
@@ -140,14 +269,127 @@
       <span class="letter">M</span>
       <span class="letter letter-e">
         E
+        <!-- 말풍선 -->
+        <div class="slime-bubble" id="slime-bubble"></div>
+        <!-- 슬라임 -->
         <img
           src="/xmas_slime.png"
           alt="slime"
           class="slime"
           draggable="false"
+          id="slime"
         />
       </span>
     </div>
     <a class="help" href="mailto:ourendpoint@gmail.com">need help?</a>
+
+    <script>
+      (function () {
+        var slime = document.getElementById("slime");
+        var bubble = document.getElementById("slime-bubble");
+
+        if (!slime || !bubble) return;
+
+        var lines = [
+          "버그는... 없겠지...?",
+          "한 판만 더 하면 되겠지?",
+          "손님이 많이 와야 할텐데...",
+          "탕후루… 먹고 싶다...",
+          "오늘 운세… 가챠는 참으세요",
+          "슬라임도 야근 중입니다",
+          "슬라임 월급은 젤리로 주세요..",
+          "탕후루 많이 먹으면 충치생겨요..",
+          "아 그만 좀 눌러요",
+          "그만 누르라고",
+          "아 쫌",
+          "3",
+          "2",
+          "1",
+        ];
+
+        var currentIndex = 0; // 현재 대사 인덱스
+        var hideTimeout = null;
+        var readyToExplode = false; // 마지막 대사 후 한 번 더 누르면 터짐
+        var exploded = false; // 이미 터졌는지 여부
+
+        // 말풍선 클릭 로직 (순서대로 + 마지막 이후 터짐)
+        slime.addEventListener("click", function () {
+          if (exploded) return;
+
+          // 마지막 클릭: "ㅂ2" 출력 + 터지기
+          if (readyToExplode) {
+            if (hideTimeout) clearTimeout(hideTimeout);
+
+            // 마지막 인사
+            bubble.textContent = "ㅂ2";
+            bubble.classList.add("visible");
+
+            slime.classList.remove("is-pressed");
+            slime.classList.add("is-exploding");
+            exploded = true;
+
+            // 슬라임 애니메이션 끝나면 숨김
+            slime.addEventListener("animationend", function handler() {
+              slime.style.display = "none";
+              slime.removeEventListener("animationend", handler);
+            });
+
+            // 말풍선은 잠깐 있다가 사라지도록
+            hideTimeout = setTimeout(function () {
+              bubble.classList.remove("visible");
+            }, 800);
+
+            return;
+          }
+
+          if (!lines.length) return;
+
+          // 순서대로 대사 표출
+          bubble.textContent = lines[currentIndex];
+          bubble.classList.add("visible");
+
+          // 마지막 대사를 보여줬으면, 다음 클릭에서 터지도록 플래그 설정
+          if (currentIndex === lines.length - 1) {
+            readyToExplode = true;
+          } else {
+            currentIndex += 1;
+          }
+
+          if (hideTimeout) clearTimeout(hideTimeout);
+          hideTimeout = setTimeout(function () {
+            bubble.classList.remove("visible");
+          }, 2000);
+        });
+
+        function pressStart(e) {
+          if (exploded) return;
+          slime.classList.add("is-pressed");
+        }
+
+        function pressEnd(e) {
+          if (exploded) return;
+          slime.classList.remove("is-pressed");
+        }
+
+        ["pointerdown", "mousedown", "touchstart"].forEach(function (ev) {
+          slime.addEventListener(ev, function (e) {
+            pressStart(e);
+          });
+        });
+
+        [
+          "pointerup",
+          "pointerleave",
+          "pointercancel",
+          "mouseup",
+          "touchend",
+          "touchcancel",
+        ].forEach(function (ev) {
+          slime.addEventListener(ev, function (e) {
+            pressEnd(e);
+          });
+        });
+      })();
+    </script>
   </body>
 </html>
