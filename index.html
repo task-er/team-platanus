@@ -19,6 +19,22 @@
     />
 
     <style>
+      * {
+        box-sizing: border-box;
+        /* 전체 요소 선택/드래그 방지 */
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+
+      /* 이미지 드래그 방지 */
+      img {
+        -webkit-user-drag: none;
+        user-drag: none;
+        -khtml-user-drag: none;
+      }
+
       body {
         margin: 0;
         padding: 0;
@@ -124,7 +140,12 @@
       <span class="letter">M</span>
       <span class="letter letter-e">
         E
-        <img src="/xmas_slime.png" alt="slime" class="slime" />
+        <img
+          src="/xmas_slime.png"
+          alt="slime"
+          class="slime"
+          draggable="false"
+        />
       </span>
     </div>
     <a class="help" href="mailto:ourendpoint@gmail.com">need help?</a>
