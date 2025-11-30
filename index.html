@@ -7,6 +7,9 @@
     <!-- 모바일 대응 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+    <!-- 파비콘 -->
+    <link rel="icon" type="image/png" href="/slime.png" />
+
     <!-- Science Gothic 폰트 -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -39,6 +42,23 @@
         text-align: center;
         padding: 0 16px;
         box-sizing: border-box;
+        display: inline-flex;
+      }
+
+      .logo .letter {
+        position: relative;
+        display: inline-block;
+      }
+
+      .logo .letter-e .slime {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        /* X는 가운데 정렬, Y를 크게 해서 E 위에 '안착' */
+        transform: translateX(-50%) translateY(52px);
+        width: 60px;
+        height: auto;
+        pointer-events: none;
       }
 
       .help {
@@ -65,6 +85,11 @@
           letter-spacing: -0.06em;
         }
 
+        .logo .letter-e .slime {
+          width: 32px;
+          transform: translateX(-50%) translateY(32px);
+        }
+
         .help {
           right: 18px;
           bottom: 18px;
@@ -79,6 +104,11 @@
           letter-spacing: -0.05em;
         }
 
+        .logo .letter-e .slime {
+          width: 26px;
+          transform: translateX(-50%) translateY(21px);
+        }
+
         .help {
           right: 12px;
           bottom: 14px;
@@ -88,7 +118,15 @@
     </style>
   </head>
   <body>
-    <div class="logo">GAME</div>
+    <div class="logo">
+      <span class="letter">G</span>
+      <span class="letter">A</span>
+      <span class="letter">M</span>
+      <span class="letter letter-e">
+        E
+        <img src="/xmas_slime.png" alt="slime" class="slime" />
+      </span>
+    </div>
     <a class="help" href="mailto:ourendpoint@gmail.com">need help?</a>
   </body>
 </html>
