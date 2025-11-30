@@ -1,0 +1,19 @@
+{
+  "redirects": [
+    {
+      "source": "/favicon.ico",
+      "destination": "/favicon.ico",
+      "permanent": true
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/robots.txt",
+      "permanent": true
+    },
+    {
+      "source": "/:path((?!$).+)",
+      "destination": "/",
+      "permanent": true
+    }
+  ]
+}
