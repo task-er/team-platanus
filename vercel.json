@@ -11,7 +11,7 @@
       "permanent": true
     },
     {
-      "source": "/:path((?!.*\\.png$).+)",
+      "source": "/:path((?!plan|.*\\.png$).+)",
       "destination": "/",
       "permanent": true
     }
